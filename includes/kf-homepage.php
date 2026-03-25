@@ -88,7 +88,7 @@ function kf_homepage_shortcode() {
         ?>
         <div class="kf-container kf-login-form-container">
             <h1>Kerry Football Login</h1>
-            <?php wp_login_form( array( 'redirect' => site_url( home_url() ) ) ); ?>
+            <?php wp_login_form( array( 'redirect' => home_url() ) ); ?>
         </div>
         <?php
     }
