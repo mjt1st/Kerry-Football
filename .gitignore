@@ -1,0 +1,18 @@
+# WordPress
+wp-config.php
+.htaccess
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+
+# Backups (keep tracked separately)
+*.bak
+
+# Zip archives
+*.zip

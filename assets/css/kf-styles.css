@@ -1,0 +1,619 @@
+/*
+ * Kerry Football - Main Stylesheet
+ */
+
+/* --- Global Variables & Body --- */
+:root {
+    --kf-primary-color: #0d47a1; /* Deep Blue */
+    --kf-secondary-color: #1565c0; /* Lighter Blue */
+    --kf-text-color: #333333;
+    --kf-border-color: #bbb; /* Darkened gray for better visibility */
+    --kf-success-color: #28a745;
+    --kf-danger-color: #d63638;
+}
+
+/* --- General Typography & Layout Polish --- */
+.kf-container h1 {
+    font-size: 2em;
+    color: #111;
+    margin: 0;
+    padding: 0;
+    border: none;
+}
+.kf-container h2 {
+    font-size: 1.6em;
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+    padding-bottom: 0.25em;
+    border-bottom: 1px solid var(--kf-border-color);
+}
+.kf-container h3 {
+    font-size: 1.3em;
+    margin-top: 1.25em;
+    margin-bottom: 0.5em;
+    padding-bottom: 0.25em;
+    border-bottom: 1px solid #eee;
+}
+
+/* --- Player Dashboard Header --- */
+.kf-container .kf-dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap; 
+    gap: 1em;
+    padding-bottom: 1.5em;
+    border-bottom: 1px solid var(--kf-border-color);
+    margin-bottom: 2em;
+}
+.kf-container .kf-subheader-stats {
+    margin: 0;
+    padding: 0;
+    border: none;
+    font-size: 1.1em;
+    color: #555;
+    text-align: right;
+    white-space: nowrap;
+}
+.kf-container .kf-subheader-stats .kf-stat-separator {
+    margin: 0 15px;
+    color: #ccc;
+}
+
+/* --- Player Dashboard Action Card --- */
+.kf-container .kf-action-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1.5em;
+    margin-bottom: 2em;
+    padding: 20px;
+    background-color: #f8f9fa;
+    border: 1px solid var(--kf-border-color);
+    border-left: 5px solid var(--kf-primary-color);
+    border-radius: 4px;
+}
+.kf-container .kf-action-card-info h3 {
+    margin: 0;
+    padding: 0;
+    border: none;
+    font-size: 1.5em;
+}
+.kf-container .kf-action-card-info p {
+    margin: 0.25em 0 0 0;
+    font-size: 1em;
+    color: #555;
+}
+.kf-container .kf-action-card-status {
+    margin-top: 0.75em;
+    font-weight: bold;
+}
+
+/* --- Status Indicators --- */
+.kf-status-submitted, .kf-status-finalized, .kf-status-active { color: var(--kf-success-color); font-weight: bold; }
+.kf-status-pending { color: var(--kf-danger-color); font-weight: bold; }
+.kf-status-archived { color: #6c757d; }
+
+/* --- General Components --- */
+.kf-button {
+    /* Add any general button styles here if needed */
+}
+
+/* --- Table Styles --- */
+.kf-table-wrapper { 
+    overflow-x: auto; 
+    padding-bottom: 15px; 
+}
+
+.kf-zoom-container {
+    width: 100%;
+    transform-origin: top left;
+}
+
+.kf-table { 
+    width: 100%; 
+    border-collapse: collapse; 
+}
+.kf-table th, .kf-table td { 
+    padding: 12px 15px; 
+    text-align: left; 
+    border: 1px solid var(--kf-border-color); 
+    vertical-align: middle; 
+}
+.kf-table th { 
+    /* RESTORATION/FIX: Ensure the header color is applied */
+    background-color: var(--kf-primary-color) !important; 
+    color: white !important; 
+    font-weight: bold; 
+    text-align: left; 
+}
+.kf-table tr:nth-of-type(even) { 
+    background-color: #f9f9f9; 
+}
+
+/* Sticky table header for Week Summary */
+.kf-table thead {
+    position: sticky;
+    top: 0;
+    background: var(--kf-primary-color);
+    color: white;
+    z-index: 10;
+}
+
+/* Commissioner Dashboard Polish */
+.kf-table th.kf-center, 
+.kf-table td.kf-center {
+    text-align: center;
+}
+.kf-actions-group { 
+    display: flex; 
+    align-items: center; 
+    gap: 8px; 
+    flex-wrap: wrap; 
+}
+.kf-actions-group .kf-action-separator { 
+    color: #cccccc; 
+}
+.kf-button-as-link { 
+    background: none !important; 
+    border: none !important; 
+    padding: 0 !important; 
+    margin: 0 !important; 
+    font-family: inherit; 
+    font-size: inherit; 
+    text-decoration: underline; 
+    cursor: pointer; 
+    box-shadow: none !important; 
+}
+.kf-button-as-link.kf-danger-text { 
+    color: var(--kf-danger-color); 
+}
+
+/* --- Astra Theme Fix --- */
+.ast-page-builder-template .entry-content, 
+.ast-full-width-container .entry-content { 
+    padding-left: 2em !important; 
+    padding-right: 2em !important; 
+}
+
+/* --- Live Score Styling --- */
+.kf-table td.kf-score-pending {
+    font-style: italic;
+    color: #777;
+}
+
+.kf-status-in-progress {
+    color: var(--kf-secondary-color, #1565c0);
+    font-weight: bold;
+}
+
+/* --- Week Summary Header Fix --- */
+.kf-container .kf-header-controls-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* --- Prominent Notices --- */
+.notice.notice-error {
+    background-color: #f8d7da;
+    border-left: 5px solid #d63638;
+    color: #721c24;
+    font-weight: bold;
+    font-size: 1.2em;
+    padding: 1em;
+}
+.notice.notice-success {
+    background-color: #d4edda;
+    border-left: 5px solid #28a745;
+    color: #155724;
+    font-weight: bold;
+    font-size: 1.2em;
+    padding: 1em;
+}
+.notice.notice-warning {
+    background-color: #fff3cd;
+    border-left: 5px solid #ffc107;
+    color: #856404;
+    font-weight: bold;
+    font-size: 1.2em;
+    padding: 1em;
+}
+
+/* --- Win/Loss background colors --- */
+.kf-table td.kf-win {
+    background-color: #d4edda;
+}
+.kf-table td.kf-loss {
+    background-color: #f8d7da;
+}
+
+/* --- Win/Loss icons (ONLY on the 'Pick' cell) --- */
+.kf-table td.kf-pick-cell.kf-win::after {
+    content: '✓';
+    color: #155724;
+    font-weight: bold;
+    margin-left: 5px;
+}
+.kf-table td.kf-pick-cell.kf-loss::after {
+    content: '✗';
+    color: #721c24;
+    font-weight: bold;
+    margin-left: 5px;
+}
+
+/* --- Tiebreaker Row Styling --- */
+.kf-table tr.kf-tiebreaker-row {
+    font-style: italic;
+}
+
+/* --- Current Player Column Highlight --- */
+.kf-table th.kf-current-player-col,
+.kf-table td.kf-current-player-col {
+    border-left: 3px solid var(--kf-secondary-color);
+    border-right: 3px solid var(--kf-secondary-color);
+}
+.kf-table thead tr:first-child th.kf-current-player-col {
+    border-top: 3px solid var(--kf-secondary-color);
+}
+.kf-table tfoot tr:last-child td.kf-current-player-col {
+    border-bottom: 3px solid var(--kf-secondary-color);
+}
+.kf-table tr.kf-mid-header th.kf-current-player-col {
+    border-top: 3px solid var(--kf-secondary-color) !important;
+    border-bottom: 3px solid var(--kf-secondary-color) !important;
+}
+
+/* --- Player Highlight Border Cleanup --- */
+.kf-table .kf-current-player-col.kf-pick-cell {
+    border-right-width: 0;
+}
+.kf-table .kf-pick-cell.kf-current-player-col + .kf-points-cell.kf-current-player-col {
+    border-left-width: 0;
+}
+
+/* --- BPOW Column --- */
+.kf-table th.kf-bpow-column {
+    color: #ffd700 !important; /* Gold text for BPOW header */
+    text-align: center;
+    background-color: var(--kf-primary-color);
+}
+
+/* --- Winner Icons --- */
+.kf-winner-icon {
+    position: relative;
+    display: inline-block;
+    cursor: help;
+}
+.kf-winner-icon.kf-bpow-winner {
+    color: #ffd700; /* Gold for BPOW trophy */
+    font-size: 1.1em;
+}
+.kf-winner-icon.kf-mwow-winner {
+    color: #ffd700; /* Gold for MWOW icon */
+    font-weight: bold;
+    font-size: 1.1em;
+}
+.kf-winner-icon::after {
+    content: attr(title);
+    visibility: hidden;
+    opacity: 0;
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #333;
+    color: #fff;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    white-space: nowrap;
+    z-index: 1000;
+    transition: opacity 0.3s;
+}
+.kf-winner-icon:hover::after {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* --- Season Total Row --- */
+.kf-season-total-row {
+    font-weight: bold;
+    border-top: 2px solid var(--kf-border-color);
+}
+
+/* --- Season Summary Dropdown --- */
+.kf-season-summary-dropdown {
+    position: relative;
+}
+.kf-season-summary-dropdown ul.sub-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background-color: #fff;
+    border: 1px solid var(--kf-border-color);
+    border-top: none;
+    min-width: 200px;
+    z-index: 1000;
+}
+.kf-season-summary-dropdown:hover ul.sub-menu {
+    display: block;
+}
+.kf-season-summary-dropdown ul.sub-menu li {
+    list-style: none;
+}
+.kf-season-summary-dropdown ul.sub-menu li a {
+    display: block;
+    padding: 10px;
+    color: var(--kf-text-color);
+    text-decoration: none;
+}
+.kf-season-summary-dropdown ul.sub-menu li a:hover {
+    background-color: #f9f9f9;
+}
+.submenu-open ul.sub-menu {
+    display: block;
+}
+
+/* --- Homepage Season Card Styling --- */
+.kf-season-cards-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 24px;
+}
+.kf-season-card {
+    background-color: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 24px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    transition: box-shadow 0.3s ease, transform 0.3s ease;
+    display: flex;
+    flex-direction: column;
+}
+.kf-season-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+}
+.kf-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 16px;
+    margin-bottom: 16px;
+}
+.kf-card-header h3 {
+    margin: 0;
+    font-size: 1.5em;
+    color: #1a202c;
+}
+.kf-card-badge {
+    background-color: #28a745;
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: 600;
+}
+.kf-card-badge-archived {
+    background-color: #6c757d;
+}
+.kf-card-body {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+.kf-card-stats {
+    list-style-type: none;
+    padding: 0;
+    margin: 0 0 20px 0;
+}
+.kf-card-stats li {
+    padding: 4px 0;
+    display: flex;
+    justify-content: space-between;
+}
+.kf-card-body .kf-button-primary {
+    display: block;
+    width: 100%;
+    text-align: center;
+    margin-top: auto;
+    padding: 12px;
+    font-size: 1.1em;
+}
+.kf-card-quick-links {
+    text-align: center;
+    margin-top: 16px;
+    font-size: 0.9em;
+}
+.kf-text-success {
+    color: #28a745;
+    font-weight: 600;
+}
+.kf-text-danger {
+    color: #dc3545;
+    font-weight: 600;
+}
+.kf-card-body hr {
+    border: 0;
+    border-top: 1px solid #eee;
+    margin: 16px 0;
+}
+
+/* --- Commissioner Action Bar Styling --- */
+.kf-action-bar {
+    background-color: #f7f7f7;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 12px;
+    margin: 20px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+.kf-action-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.kf-action-bar form {
+    margin: 0;
+}
+.kf-action-bar .kf-view-as-form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.kf-finalized-controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+.kf-finalized-controls .kf-status-finalized {
+    font-weight: bold;
+    font-size: 1.1em;
+    padding: 8px 12px;
+    background-color: #e4f3e8;
+    border: 1px solid #28a745;
+    border-radius: 4px;
+}
+.kf-finalized-controls .kf-status-tie-resolution {
+    font-weight: bold;
+    font-size: 1.1em;
+    padding: 8px 12px;
+    background-color: #fbeaea;
+    border: 1px solid #d63638;
+    border-radius: 4px;
+}
+.kf-breadcrumbs {
+    margin: 0 0 10px 0;
+    font-size: 0.9em;
+    color: #555;
+}
+.kf-breadcrumbs a {
+    text-decoration: none;
+    color: #0073aa;
+}
+.kf-breadcrumbs a:hover {
+    text-decoration: underline;
+}
+.kf-breadcrumbs span {
+    font-weight: bold;
+    color: #1a202c;
+}
+
+/* --- Season Summary Visual Cues Styling --- */
+.kf-table td.kf-dd-involved {
+    color: #0073aa;
+    font-weight: bold;
+}
+.kf-award-icon {
+    font-size: 1.1em;
+    vertical-align: middle;
+    margin-left: 4px;
+}
+.kf-award-badge {
+    display: inline-block;
+    background-color: #28a745;
+    color: #fff;
+    font-size: 0.7em;
+    font-weight: bold;
+    padding: 2px 5px;
+    border-radius: 4px;
+    vertical-align: middle;
+    margin-left: 4px;
+}
+
+/* --- Week Summary Repeating Header --- */
+.kf-table tr.kf-mid-header th {
+    background-color: var(--kf-primary-color);
+    color: white;
+    font-weight: bold;
+}
+
+/* --- Week Summary Header & Navigation --- */
+.kf-page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1em;
+    margin-bottom: 1em;
+}
+.kf-week-nav {
+    display: flex;
+    gap: 10px;
+}
+.kf-header-cell-content {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    height: 100%;
+}
+.kf-header-cell-content small {
+    font-weight: normal;
+    font-size: 0.8em;
+    margin-top: 4px;
+}
+.kf-live-score {
+    color: #a7c0e8; /* Lighter blue for better contrast */
+}
+.kf-final-score {
+    color: #ffffff; /* White text for final scores */
+}
+.kf-tie-resolution-form label {
+    font-weight: normal;
+    cursor: default;
+}
+
+/* --- BPOW Two-Column Responsive Layout --- */
+.kf-picks-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5em;
+}
+
+.kf-picks-grid {
+    /* Default: Stack columns vertically for mobile/small screen */
+    display: flex;
+    flex-direction: column;
+    gap: 2em;
+    width: 100%; /* Ensure it uses full container width */
+}
+
+/* Media query for tablets and desktops */
+@media (min-width: 992px) {
+    .kf-picks-grid {
+        display: grid !important; /* FORCED GRID: This should fix the stacking issue */
+        grid-template-columns: 1fr 1fr !important; /* Two equal columns, forced */
+        gap: 3em; /* Slightly wider gap for desktop readability */
+        flex-direction: initial; /* Reset flex-direction from mobile default */
+    }
+}
+
+.kf-picks-column h2 {
+    margin-top: 0;
+    font-size: 1.4em;
+    padding-bottom: 0.25em;
+    border-bottom: 1px solid #ddd;
+    margin-bottom: 1em; 
+} 
+
+.kf-picks-column .kf-table {
+    width: 100%; 
+}
+
+/* This targets the main action button group *after* the tables */
+.kf-picks-actions {
+    text-align: right;
+    margin-top: 1.5em;
+    /* Span across both columns when in the grid layout */
+    grid-column: 1 / -1; 
+}
