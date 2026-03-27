@@ -95,6 +95,7 @@ function kf_week_setup_form() {
                 $tiebreaker_index = isset($_POST['tiebreaker_marker']) ? intval($_POST['tiebreaker_marker']) : -1;
 
                 foreach ($team_a_list as $index => $teamA) {
+                    $teamA = sanitize_text_field($teamA);
                     $teamB = sanitize_text_field($team_b_list[$index]);
                     if (!empty($teamA) && !empty($teamB)) {
                         $matchup_data = [ 'week_id' => $week_id, 'team_a'  => $teamA, 'team_b'  => $teamB, ];
@@ -127,7 +128,16 @@ function kf_week_setup_form() {
 
                 $picks_page_url = site_url('/player-dashboard/');
                 $message = "<p>Heads up, players!</p><p>Week {$week_info->week_number} is now open for picks. The deadline to submit is <strong>{$deadline_formatted}</strong>.</p><p><a href='{$picks_page_url}'>Click here to make your picks!</a></p><p>Good luck!</p>";
-                kf_send_notification_to_season_players($season_id, $subject, $message);
+                // Use the proper notification function that respects per-player preferences
+                if (function_exists('kf_send_picks_ready_notification')) {
+                    kf_send_picks_ready_notification($week_id);
+                } else {
+                    kf_send_notification_to_season_players($season_id, $subject, $message);
+                }
+                // Schedule deadline reminder (24 hours before deadline)
+                if (function_exists('kf_schedule_deadline_reminder') && !empty($week_info->submission_deadline)) {
+                    kf_schedule_deadline_reminder($week_id, $week_info->submission_deadline);
+                }
                 echo '<div class="notice notice-success is-dismissible"><p>Week has been published/updated and players notified. You will be redirected shortly.</p></div>';
             } else {
                 echo '<div class="notice notice-success is-dismissible"><p>Week data has been saved. You will be redirected shortly.</p></div>';

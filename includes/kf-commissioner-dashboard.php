@@ -31,8 +31,64 @@ function kf_commissioner_dashboard_shortcode() {
     }
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_season']) && isset($_POST['kf_delete_season_nonce']) && wp_verify_nonce($_POST['kf_delete_season_nonce'], 'kf_delete_season_action')) {
-        // ... (Cascading delete logic) ...
-        echo '<div class="notice notice-success is-dismissible"><p>Season and all related data have been deleted.</p></div>';
+        $delete_season_id = intval($_POST['season_id']);
+        if ($delete_season_id > 0) {
+            // Cascading delete: remove all related data in dependency order
+            $wpdb->delete($wpdb->prefix . 'score_history', ['user_id' => 0], ['%d']); // placeholder — delete via week_id subquery below
+            // Delete score_history entries for weeks in this season
+            $wpdb->query($wpdb->prepare(
+                "DELETE sh FROM {$wpdb->prefix}score_history sh
+                 JOIN {$wpdb->prefix}weeks w ON sh.week_id = w.id
+                 WHERE w.season_id = %d", $delete_season_id
+            ));
+            // Delete double_down_log entries for this season
+            $wpdb->delete($wpdb->prefix . 'double_down_log', ['season_id' => $delete_season_id]);
+            // Delete dd_selections for this season
+            $wpdb->delete($wpdb->prefix . 'dd_selections', ['season_id' => $delete_season_id]);
+            // Delete scores for weeks in this season
+            $wpdb->query($wpdb->prepare(
+                "DELETE sc FROM {$wpdb->prefix}scores sc
+                 JOIN {$wpdb->prefix}weeks w ON sc.week_id = w.id
+                 WHERE w.season_id = %d", $delete_season_id
+            ));
+            // Delete picks for weeks in this season
+            $wpdb->query($wpdb->prepare(
+                "DELETE p FROM {$wpdb->prefix}picks p
+                 JOIN {$wpdb->prefix}weeks w ON p.week_id = w.id
+                 WHERE w.season_id = %d", $delete_season_id
+            ));
+            // Delete pending_picks for weeks in this season
+            $wpdb->query($wpdb->prepare(
+                "DELETE pp FROM {$wpdb->prefix}pending_picks pp
+                 JOIN {$wpdb->prefix}weeks w ON pp.week_id = w.id
+                 WHERE w.season_id = %d", $delete_season_id
+            ));
+            // Delete matchups for weeks in this season
+            $wpdb->query($wpdb->prepare(
+                "DELETE m FROM {$wpdb->prefix}matchups m
+                 JOIN {$wpdb->prefix}weeks w ON m.week_id = w.id
+                 WHERE w.season_id = %d", $delete_season_id
+            ));
+            // Delete weeks
+            $wpdb->delete($wpdb->prefix . 'weeks', ['season_id' => $delete_season_id]);
+            // Delete player order
+            $wpdb->delete($wpdb->prefix . 'season_player_order', ['season_id' => $delete_season_id]);
+            // Delete season players
+            $wpdb->delete($wpdb->prefix . 'season_players', ['season_id' => $delete_season_id]);
+            // Delete notification settings
+            $wpdb->query($wpdb->prepare(
+                "DELETE FROM {$wpdb->prefix}notification_settings WHERE season_id = %d", $delete_season_id
+            ));
+            // Finally, delete the season itself
+            $wpdb->delete($seasons_table, ['id' => $delete_season_id]);
+
+            // Clear session if the deleted season was active
+            if (isset($_SESSION['kf_active_season_id']) && (int)$_SESSION['kf_active_season_id'] === $delete_season_id) {
+                unset($_SESSION['kf_active_season_id']);
+            }
+
+            echo '<div class="notice notice-success is-dismissible"><p>Season and all related data have been deleted.</p></div>';
+        }
     }
 
     $seasons = $wpdb->get_results("SELECT * FROM $seasons_table ORDER BY is_active DESC, id DESC");

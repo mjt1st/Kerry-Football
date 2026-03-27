@@ -35,12 +35,21 @@ function kf_enter_results_shortcode() {
     ) {
         $results = $_POST['results'] ?? [];
 
+        // Get valid matchup IDs for this week to prevent cross-week tampering
+        $valid_matchup_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT id FROM $matchups_table WHERE week_id = %d", $week_id
+        ));
+
         foreach ($results as $matchup_id => $result) {
+            $matchup_id = intval($matchup_id);
+            if (!in_array($matchup_id, $valid_matchup_ids)) {
+                continue; // Skip matchups that don't belong to this week
+            }
             $sanitized_result = sanitize_text_field(stripslashes($result));
             $wpdb->update(
                 $matchups_table,
                 ['result' => $sanitized_result],
-                ['id' => intval($matchup_id)]
+                ['id' => $matchup_id]
             );
         }
 

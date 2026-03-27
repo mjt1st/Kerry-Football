@@ -69,20 +69,36 @@ function kf_player_management_shortcode() {
     }
 
 
-    // --- One-Time Population of Player Order ---
-    $current_player_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $season_players_table WHERE season_id = %d", $season_id));
-    $order_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $player_order_table WHERE season_id = %d", $season_id));
-    
-    if ($current_player_count > 0 && $order_count != $current_player_count) {
+    // --- Sync Player Order (preserve existing custom order, only add/remove as needed) ---
+    $current_player_ids = $wpdb->get_col($wpdb->prepare("SELECT user_id FROM $season_players_table WHERE season_id = %d", $season_id));
+    $ordered_player_ids = $wpdb->get_col($wpdb->prepare("SELECT user_id FROM $player_order_table WHERE season_id = %d ORDER BY display_order ASC", $season_id));
+
+    // If no order exists at all, initialize from scratch alphabetically
+    if (empty($ordered_player_ids) && !empty($current_player_ids)) {
         $players_to_order = $wpdb->get_results($wpdb->prepare("SELECT sp.user_id FROM $season_players_table sp JOIN $users_table u ON sp.user_id = u.ID WHERE sp.season_id = %d ORDER BY u.display_name ASC", $season_id));
-        
-        $wpdb->delete($player_order_table, ['season_id' => $season_id]);
-        
         foreach ($players_to_order as $index => $player) {
-            $wpdb->insert($player_order_table, 
+            $wpdb->insert($player_order_table,
                 ['season_id' => $season_id, 'user_id' => $player->user_id, 'display_order' => $index],
                 ['%d', '%d', '%d']
             );
+        }
+    } else {
+        // Remove order entries for players no longer in the season
+        $removed = array_diff($ordered_player_ids, $current_player_ids);
+        foreach ($removed as $removed_id) {
+            $wpdb->delete($player_order_table, ['season_id' => $season_id, 'user_id' => $removed_id]);
+        }
+        // Add missing players to end of order (preserves existing custom order)
+        $missing = array_diff($current_player_ids, $ordered_player_ids);
+        if (!empty($missing)) {
+            $max_order = (int)$wpdb->get_var($wpdb->prepare("SELECT MAX(display_order) FROM $player_order_table WHERE season_id = %d", $season_id));
+            foreach ($missing as $missing_id) {
+                $max_order++;
+                $wpdb->insert($player_order_table,
+                    ['season_id' => $season_id, 'user_id' => $missing_id, 'display_order' => $max_order],
+                    ['%d', '%d', '%d']
+                );
+            }
         }
     }
     

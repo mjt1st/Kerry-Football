@@ -551,7 +551,7 @@ function kf_week_summary_view() {
 
                                         // tiebreaker is STANDARD-only
                                         $pick_data = $std_picks_map[$tiebreaker_matchup->id][$player_id] ?? null;
-                                        $pick = $pick_data ? esc_html($pick->pick) : '-';
+                                        $pick = $pick_data ? esc_html($pick_data->pick) : '-';
                                         $diff = '-';
                                         if (isset($finalized_scores[$player_id])) {
                                             $diff = $finalized_scores[$player_id]['tiebreaker_diff'];

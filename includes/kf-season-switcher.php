@@ -48,14 +48,22 @@ function kf_ajax_set_active_season() {
     if ($season_id > 0) {
         global $wpdb;
 
-        // Check if user is a participant. This check is still valid.
-        $season_exists = $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$wpdb->prefix}seasons s JOIN {$wpdb->prefix}season_players sp ON s.id = sp.season_id WHERE s.id = %d AND sp.user_id = %d AND sp.status = 'accepted'",
-            $season_id,
-            get_current_user_id()
-        ));
+        // Check if user is a participant OR a commissioner (commissioners can access all seasons)
+        $is_commissioner = current_user_can('manage_options');
+        $season_exists = false;
+        if ($is_commissioner) {
+            // Commissioners can switch to any season
+            $season_exists = $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$wpdb->prefix}seasons WHERE id = %d", $season_id
+            ));
+        } else {
+            $season_exists = $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$wpdb->prefix}seasons s JOIN {$wpdb->prefix}season_players sp ON s.id = sp.season_id WHERE s.id = %d AND sp.user_id = %d AND sp.status = 'accepted'",
+                $season_id,
+                get_current_user_id()
+            ));
+        }
 
-        // As before, we will tackle universal admin access separately. For now, they must be a player.
         if ($season_exists) {
             $_SESSION['kf_active_season_id'] = $season_id;
             delete_transient('kf_default_season_' . get_current_user_id());

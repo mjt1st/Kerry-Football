@@ -84,8 +84,10 @@ function kf_send_email_to_eligible_players($season_id, $notification_type, $subj
     $from_name = get_bloginfo('name');
     $headers[] = "From: $from_name <$from_email>";
 
-    // Send the email in a single batch
-    wp_mail($recipients, $subject, $message, $headers);
+    // Send emails individually to protect player privacy (no shared To: field)
+    foreach ($recipients as $recipient_email) {
+        wp_mail($recipient_email, $subject, $message, $headers);
+    }
 }
 
 
@@ -171,7 +173,7 @@ function kf_unschedule_deadline_reminder($week_id) {
  */
 function kf_execute_deadline_reminder($week_id) {
     global $wpdb;
-    $week = $wpdb->get_row($wpdb->prepare("SELECT w.week_number, w.submission_deadline, s.id as season_id, s.name as season_name FROM {$wpdb->prefix}weeks w JOIN {$wpdb->prefix}seasons s ON w.season_id = s.id WHERE w.id = %d", $week_id));
+    $week = $wpdb->get_row($wpdb->prepare("SELECT w.week_number, w.submission_deadline, w.status, s.id as season_id, s.name as season_name FROM {$wpdb->prefix}weeks w JOIN {$wpdb->prefix}seasons s ON w.season_id = s.id WHERE w.id = %d", $week_id));
     if (!$week || $week->status !== 'published') {
         return; // Don't send if week is no longer published
     }

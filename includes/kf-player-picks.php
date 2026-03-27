@@ -77,9 +77,9 @@ function _kf_display_picks_form(
     // Double Down (only Standard form & not late request)
     if (!$is_bpow_form && !$is_late_submission_form) {
         $dd_uses_completed = (int)$wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(sh.id) FROM {$wpdb->prefix}score_history sh 
+            "SELECT COUNT(sh.id) FROM {$wpdb->prefix}score_history sh
              JOIN {$wpdb->prefix}weeks w ON sh.replaced_by_week_id = w.id
-             WHERE sh.user_id = %d AND w.season_id = %d",
+             WHERE sh.user_id = %d AND w.season_id = %d AND w.status = 'finalized'",
             $target_user_id, $season_id
         ));
         $dd_uses_remaining = max(0, (int)$active_season_for_dd->dd_max_uses - $dd_uses_completed);
@@ -268,19 +268,20 @@ function kf_my_picks_shortcode() {
         }
     }
 
-    // Pending late submission
+    // Pending late submission (only show if actually still pending, not if declined/approved)
     $pending_submission = $wpdb->get_row($wpdb->prepare(
-        "SELECT * FROM {$wpdb->prefix}pending_picks WHERE user_id = %d AND week_id = %d ORDER BY requested_at DESC LIMIT 1",
+        "SELECT * FROM {$wpdb->prefix}pending_picks WHERE user_id = %d AND week_id = %d AND status = 'pending' ORDER BY requested_at DESC LIMIT 1",
         $target_user_id, $week_id
     ));
 
-    // BPOW eligibility
+    // BPOW eligibility — find the most recent finalized week (not just week_number - 1)
     $is_bpow_eligible = false;
     if ((int)$current_week->week_number > 1) {
-        $prev_week_num = (int)$current_week->week_number - 1;
         $last_bpow_winner = $wpdb->get_var($wpdb->prepare(
-            "SELECT bpow_winner_user_id FROM $weeks_table WHERE season_id = %d AND week_number = %d AND status = 'finalized'",
-            $season_id, $prev_week_num
+            "SELECT bpow_winner_user_id FROM $weeks_table
+             WHERE season_id = %d AND week_number < %d AND status = 'finalized'
+             ORDER BY week_number DESC LIMIT 1",
+            $season_id, (int)$current_week->week_number
         ));
         if ($last_bpow_winner && (int)$last_bpow_winner === (int)$target_user_id) {
             $is_bpow_eligible = true;
@@ -329,6 +330,35 @@ function kf_my_picks_shortcode() {
                 $bpow_picks[$mid]  = $pick;
                 $bpow_points[$mid] = $pv;
             }
+
+            // Server-side validation: matchup IDs must belong to this week
+            $valid_matchup_ids = $wpdb->get_col($wpdb->prepare(
+                "SELECT id FROM {$wpdb->prefix}matchups WHERE week_id = %d", $week_id
+            ));
+            $valid_non_tb_ids = $wpdb->get_col($wpdb->prepare(
+                "SELECT id FROM {$wpdb->prefix}matchups WHERE week_id = %d AND is_tiebreaker = 0", $week_id
+            ));
+            $valid_tb_ids = $wpdb->get_col($wpdb->prepare(
+                "SELECT id FROM {$wpdb->prefix}matchups WHERE week_id = %d AND is_tiebreaker = 1", $week_id
+            ));
+
+            // Filter out any matchup IDs not belonging to this week
+            $standard_picks  = array_filter($standard_picks,  fn($v, $k) => in_array((int)$k, $valid_matchup_ids), ARRAY_FILTER_USE_BOTH);
+            $standard_points = array_filter($standard_points, fn($v, $k) => in_array((int)$k, $valid_matchup_ids), ARRAY_FILTER_USE_BOTH);
+            if (!empty($bpow_picks)) {
+                $bpow_picks  = array_filter($bpow_picks,  fn($v, $k) => in_array((int)$k, $valid_matchup_ids), ARRAY_FILTER_USE_BOTH);
+                $bpow_points = array_filter($bpow_points, fn($v, $k) => in_array((int)$k, $valid_matchup_ids), ARRAY_FILTER_USE_BOTH);
+            }
+
+            // Check that ALL non-tiebreaker matchups have a pick (standard picks)
+            $std_matchup_ids_submitted = array_keys(array_filter($standard_points, fn($v) => (int)$v > 0));
+            $missing_matchups = array_diff($valid_non_tb_ids, $std_matchup_ids_submitted);
+            // Tiebreaker matchup is allowed to have point_value=0, so check it separately
+            $has_tiebreaker_pick = !empty($valid_tb_ids) ? !empty(array_intersect(array_map('intval', array_keys($standard_picks)), array_map('intval', $valid_tb_ids))) : true;
+
+            if (!empty($missing_matchups) || !$has_tiebreaker_pick) {
+                echo '<div class="notice notice-error"><p>Error: You must make a pick for every game before submitting.</p></div>';
+            } else {
 
             // Server-side uniqueness check for point values (>0) inside each section
             $std_non_tb_points = array_values(array_filter($standard_points, fn($v) => (int)$v > 0));
@@ -462,6 +492,7 @@ function kf_my_picks_shortcode() {
                     echo '<div class="notice notice-success is-dismissible"><p>Picks have been saved successfully!</p></div>';
                 }
             }
+        } // end missing matchups check
         }
     }
 

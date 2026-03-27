@@ -32,17 +32,18 @@ function kf_render_season_switcher_in_menu( $items, $args ) {
     $is_commissioner = current_user_can('manage_options');
 
     // CORRECTED: The table name is just 'seasons', not '{$wpdb->prefix}seasons'. $wpdb->prefix is already 'edk_'.
+    // Only show active seasons in the switcher (archived seasons are excluded)
     if ($is_commissioner) {
         $seasons_table = $wpdb->prefix . 'seasons';
-        $seasons = $wpdb->get_results("SELECT id, name, is_active FROM $seasons_table ORDER BY is_active DESC, name ASC");
+        $seasons = $wpdb->get_results("SELECT id, name, is_active FROM $seasons_table WHERE is_active = 1 ORDER BY name ASC");
     } else {
         $seasons_table = $wpdb->prefix . 'seasons';
         $season_players_table = $wpdb->prefix . 'season_players';
         $seasons = $wpdb->get_results($wpdb->prepare(
             "SELECT s.id, s.name, s.is_active FROM $seasons_table s
              JOIN $season_players_table sp ON s.id = sp.season_id
-             WHERE sp.user_id = %d AND sp.status = 'accepted'
-             ORDER BY s.is_active DESC, s.name ASC", $user_id
+             WHERE sp.user_id = %d AND sp.status = 'accepted' AND s.is_active = 1
+             ORDER BY s.name ASC", $user_id
         ));
     }
 

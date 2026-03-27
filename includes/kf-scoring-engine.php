@@ -100,8 +100,9 @@ function _kf_calculate_player_stats_for_week($week_id) {
         $last_week_bpow_winner_id = (int)$wpdb->get_var($wpdb->prepare(
             "SELECT bpow_winner_user_id
              FROM $weeks_table
-             WHERE season_id = %d AND week_number = %d AND status = 'finalized'",
-            $week_data->season_id, $week_data->week_number - 1
+             WHERE season_id = %d AND week_number < %d AND status = 'finalized'
+             ORDER BY week_number DESC LIMIT 1",
+            $week_data->season_id, $week_data->week_number
         ));
     }
 
@@ -235,6 +236,15 @@ function kf_finalize_week_logic($week_id, $manual_winners = []) {
 
     $wpdb->query('START TRANSACTION');
 
+    // Idempotency guard: check that week is not already finalized
+    $current_status = $wpdb->get_var($wpdb->prepare(
+        "SELECT status FROM $weeks_table WHERE id = %d", $week_id
+    ));
+    if ($current_status === 'finalized') {
+        $wpdb->query('ROLLBACK');
+        return "This week has already been finalized.";
+    }
+
     // Verify all matchups incl. tiebreaker have a result (Tie counts as a result)
     $total_matchups = $wpdb->get_var($wpdb->prepare(
         "SELECT COUNT(*) FROM $matchups_table WHERE week_id = %d AND is_tiebreaker = 0",
@@ -323,9 +333,13 @@ function kf_finalize_week_logic($week_id, $manual_winners = []) {
         $final_subtotal = $current_stats['stats_for_awards']['subtotal'];
         $is_bpow_score  = 0;
 
-        // If BPOW picks are better, use them (already tie-aware)
+        // MWOW bonus only applies to standard picks (per game rules)
+        $potential_mwow_bonus = ($player_id == $mwow_winner_id) ? $mwow_bonus : 0;
+
+        // If BPOW picks are better than standard + MWOW bonus, use BPOW picks
         if (!empty($current_stats['bpow_stats_for_score'])) {
-            if ($current_stats['bpow_stats_for_score']['subtotal'] > $final_subtotal) {
+            $regular_total_with_mwow = $final_subtotal + $potential_mwow_bonus;
+            if ($current_stats['bpow_stats_for_score']['subtotal'] > $regular_total_with_mwow) {
                 $final_wins     = $current_stats['bpow_stats_for_score']['wins'];
                 $final_subtotal = $current_stats['bpow_stats_for_score']['subtotal'];
                 $is_bpow_score  = 1;
@@ -333,7 +347,7 @@ function kf_finalize_week_logic($week_id, $manual_winners = []) {
         }
 
         // MWOW bonus only if final score came from standard picks
-        $mwow_bonus_awarded = ($player_id == $mwow_winner_id && $is_bpow_score == 0) ? $mwow_bonus : 0;
+        $mwow_bonus_awarded = ($is_bpow_score == 0) ? $potential_mwow_bonus : 0;
         $final_score = $final_subtotal + $mwow_bonus_awarded;
 
         $wpdb->insert($scores_table, [

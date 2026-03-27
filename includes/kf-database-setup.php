@@ -45,7 +45,7 @@ function kf_install_db() {
         user_id BIGINT UNSIGNED NOT NULL,
         status ENUM('invited','accepted','declined') DEFAULT 'invited',
         PRIMARY KEY  (id),
-        KEY season_id (season_id),
+        UNIQUE KEY unique_season_user (season_id, user_id),
         KEY user_id (user_id)
     ) $charset_collate;";
 
@@ -70,6 +70,9 @@ function kf_install_db() {
         status ENUM('draft', 'published', 'finalized', 'tie_resolution_needed') DEFAULT 'draft',
         mwow_winner_user_id BIGINT UNSIGNED DEFAULT NULL,
         bpow_winner_user_id BIGINT UNSIGNED DEFAULT NULL,
+        matchup_count INT DEFAULT NULL,
+        point_values TEXT DEFAULT NULL,
+        tie_data TEXT DEFAULT NULL,
         PRIMARY KEY  (id),
         KEY season_id (season_id)
     ) $charset_collate;";
@@ -127,9 +130,16 @@ function kf_install_db() {
         user_id BIGINT UNSIGNED NOT NULL,
         week_id INT NOT NULL,
         original_score INT NOT NULL,
+        original_subtotal INT DEFAULT NULL,
+        original_wins INT DEFAULT NULL,
+        original_mwow_bonus_awarded INT DEFAULT NULL,
+        original_is_bpow_score TINYINT(1) DEFAULT NULL,
         replaced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         replaced_by_week_id INT NOT NULL,
-        PRIMARY KEY  (id)
+        PRIMARY KEY  (id),
+        KEY user_id (user_id),
+        KEY week_id (week_id),
+        KEY replaced_by_week_id (replaced_by_week_id)
     ) $charset_collate;";
 
     // --- edk_double_down_log ---
@@ -140,7 +150,9 @@ function kf_install_db() {
         season_id INT NOT NULL,
         source_week_id INT NOT NULL,
         target_week_id INT NOT NULL,
-        PRIMARY KEY  (id)
+        PRIMARY KEY  (id),
+        UNIQUE KEY unique_dd_transaction (user_id, season_id, source_week_id),
+        KEY season_id (season_id)
     ) $charset_collate;";
 
     // --- edk_dd_selections ---
@@ -150,7 +162,8 @@ function kf_install_db() {
         user_id BIGINT UNSIGNED NOT NULL,
         week_id INT NOT NULL,
         season_id INT NOT NULL,
-        PRIMARY KEY  (id)
+        PRIMARY KEY  (id),
+        UNIQUE KEY unique_dd_selection (user_id, week_id, season_id)
     ) $charset_collate;";
 
     // --- edk_pending_picks ---
