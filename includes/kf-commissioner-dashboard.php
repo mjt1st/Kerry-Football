@@ -98,7 +98,10 @@ function kf_commissioner_dashboard_shortcode() {
     <div class="kf-container">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1em;">
             <h1>Commissioner Dashboard</h1>
-            <a href="<?php echo esc_url(site_url('/season-setup/')); ?>" class="kf-button">Create New Season</a>
+            <div style="display:flex;gap:8px;">
+                <a href="<?php echo esc_url(site_url('/api-settings/')); ?>" class="kf-button kf-button-secondary">&#9881; API Settings</a>
+                <a href="<?php echo esc_url(site_url('/season-setup/')); ?>" class="kf-button">Create New Season</a>
+            </div>
         </div>
 
         <div class="kf-table-wrapper">
