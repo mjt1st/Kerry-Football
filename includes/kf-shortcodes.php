@@ -33,5 +33,8 @@ function kf_register_shortcodes() {
     
     add_shortcode('kerry_football_notification_settings', 'kf_notification_settings_view');
 
+    // SPORTS API V1: Settings page for ESPN/Odds API configuration.
+    add_shortcode('kf_api_settings', 'kf_api_settings_shortcode');
+
     // COMMENT: Removed a duplicate registration for 'kf_edit_season' that pointed to an old function name.
 }

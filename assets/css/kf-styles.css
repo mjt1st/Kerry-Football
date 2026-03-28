@@ -615,5 +615,208 @@
     text-align: right;
     margin-top: 1.5em;
     /* Span across both columns when in the grid layout */
-    grid-column: 1 / -1; 
+    grid-column: 1 / -1;
+}
+
+/* ============================================================
+ * SPORTS API V1: Game Browser, Odds Display, Status Badges
+ * ============================================================ */
+
+/* --- Mode Toggle --- */
+.kf-mode-toggle-btn {
+    background: #f0f0f0;
+    color: #555;
+}
+.kf-mode-toggle-btn.kf-mode-active {
+    background: var(--kf-primary-color);
+    color: #fff;
+}
+.kf-mode-toggle-btn:hover:not(.kf-mode-active) {
+    background: #ddd;
+}
+
+/* --- Game Browser Panel --- */
+#kf-game-browser {
+    border: 2px solid var(--kf-primary-color);
+    border-radius: 8px;
+}
+
+.kf-game-date-header {
+    margin: 1em 0 0.5em;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #ddd;
+    font-size: 0.95em;
+    color: #555;
+}
+
+.kf-game-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.kf-game-row:hover {
+    background: #f0f7ff;
+}
+
+.kf-game-checkbox {
+    transform: scale(1.3);
+    flex-shrink: 0;
+}
+
+.kf-game-time {
+    color: #666;
+    font-size: 0.9em;
+    min-width: 75px;
+    flex-shrink: 0;
+}
+
+.kf-game-teams {
+    font-weight: 600;
+    flex: 1;
+}
+
+.kf-game-broadcast {
+    color: #888;
+    font-size: 0.85em;
+    font-style: italic;
+}
+
+.kf-game-status {
+    font-size: 0.8em;
+    font-weight: bold;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+.kf-game-status.kf-status-in_progress {
+    background: #dc3545;
+    color: #fff;
+}
+.kf-game-status.kf-status-final {
+    background: #28a745;
+    color: #fff;
+}
+
+.kf-browser-status {
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin-bottom: 1em;
+    font-size: 0.9em;
+}
+.kf-browser-status.kf-status-info { background: #e3f2fd; color: #1565c0; }
+.kf-browser-status.kf-status-success { background: #e8f5e9; color: #2e7d32; }
+.kf-browser-status.kf-status-warning { background: #fff3e0; color: #e65100; }
+.kf-browser-status.kf-status-error { background: #fce4ec; color: #c62828; }
+
+/* --- API Badge on Matchup Fieldsets --- */
+.kf-api-badge {
+    display: inline-block;
+    background: var(--kf-primary-color);
+    color: #fff;
+    font-size: 0.7em;
+    padding: 1px 6px;
+    border-radius: 8px;
+    vertical-align: middle;
+    margin-left: 6px;
+}
+.kf-api-locked {
+    background: #f5f5f5;
+    border-color: #ccc;
+}
+
+.kf-game-meta-display {
+    font-size: 0.85em;
+    color: #777;
+    margin-top: 6px;
+    padding-top: 4px;
+    border-top: 1px dashed #ddd;
+}
+
+/* --- Odds Display on Player Picks --- */
+.kf-odds-line {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 4px;
+    font-size: 0.82em;
+    color: #777;
+    line-height: 1.3;
+}
+.kf-odds-line span {
+    white-space: nowrap;
+}
+.kf-odds-line span::after {
+    content: '';
+}
+
+/* Mobile: single line */
+@media (max-width: 600px) {
+    .kf-odds-line {
+        gap: 4px;
+        font-size: 0.78em;
+    }
+    .kf-odds-line span {
+        border-right: 1px solid #ccc;
+        padding-right: 4px;
+    }
+    .kf-odds-line span:last-child {
+        border-right: none;
+        padding-right: 0;
+    }
+}
+
+/* --- Status Badges on Enter Results Page --- */
+.kf-status-badge {
+    display: inline-block;
+    font-size: 0.75em;
+    font-weight: bold;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.kf-badge-final {
+    background: #28a745;
+    color: #fff;
+}
+.kf-badge-live {
+    background: #dc3545;
+    color: #fff;
+    animation: kf-pulse 1.5s infinite;
+}
+.kf-badge-scheduled {
+    background: #e0e0e0;
+    color: #555;
+}
+
+@keyframes kf-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+.kf-auto-tag {
+    display: inline-block;
+    background: #e3f2fd;
+    color: var(--kf-primary-color);
+    font-size: 0.7em;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.kf-score-cell {
+    font-size: 1.1em;
+    text-align: center;
+}
+
+/* --- API Settings Usage Bar --- */
+.kf-usage-bar {
+    background: #e0e0e0;
+    border-radius: 8px;
+    height: 20px;
+    overflow: hidden;
 }

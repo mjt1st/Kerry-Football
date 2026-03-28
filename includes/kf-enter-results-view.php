@@ -77,41 +77,99 @@ function kf_enter_results_shortcode() {
         }
     }
 
-    ob_start(); ?>
-    <div class="kf-container">
-        <h1>Enter Results</h1>
-        <h2 style="margin-top:0;">Week <?php echo esc_html($week->week_number); ?> of <?php echo esc_html($season_name); ?></h2>
-        <a href="<?php echo esc_url(site_url('/manage-weeks/')); ?>">&larr; Back to Manage Weeks</a>
+    // SPORTS API V1: Detect if this is an API-mode week (any matchup has ESPN ID)
+    $is_api_week = false;
+    foreach ($matchups as $m) {
+        if (!empty($m->espn_game_id)) {
+            $is_api_week = true;
+            break;
+        }
+    }
 
-        <form method="POST" class="kf-card kf-tracked-form" style="margin-top: 1.5em;">
+    ob_start(); ?>
+    <div class=”kf-container”>
+        <h1>Enter Results</h1>
+        <h2 style=”margin-top:0;”>Week <?php echo esc_html($week->week_number); ?> of <?php echo esc_html($season_name); ?></h2>
+        <a href=”<?php echo esc_url(site_url('/manage-weeks/')); ?>”>&larr; Back to Manage Weeks</a>
+
+        <?php if ($is_api_week): ?>
+            <div style=”display:flex;justify-content:flex-end;margin-top:1em;”>
+                <button type=”button” id=”kf-refresh-scores-btn” class=”kf-button” onclick=”kfRefreshScores(<?php echo intval($week_id); ?>)”>&#128260; Refresh Scores Now</button>
+            </div>
+            <div id=”kf-refresh-status” style=”display:none;margin-top:8px;”></div>
+        <?php endif; ?>
+
+        <form method=”POST” class=”kf-card kf-tracked-form” style=”margin-top: 1.5em;”>
             <?php wp_nonce_field('kf_save_results_action_' . $week_id, 'kf_results_nonce'); ?>
             <p>For each matchup, select the winning team, <strong>or choose “Tie”</strong>. For the tiebreaker, enter the total points. You can save your progress at any time.</p>
 
-            <table class="kf-table">
-                <thead><tr><th>Matchup</th><th style="width: 50%;">Result</th></tr></thead>
+            <table class=”kf-table”>
+                <thead>
+                    <tr>
+                        <th>Matchup</th>
+                        <?php if ($is_api_week): ?><th style=”width:120px;”>Score</th><th style=”width:100px;”>Status</th><?php endif; ?>
+                        <th style=”width:<?php echo $is_api_week ? '35%' : '50%'; ?>;”>Result</th>
+                    </tr>
+                </thead>
                 <tbody>
-                <?php foreach ($matchups as $matchup): ?>
+                <?php foreach ($matchups as $matchup):
+                    $has_espn = !empty($matchup->espn_game_id);
+                    $is_auto_filled = $has_espn && !empty($matchup->result) && $matchup->game_status === 'final';
+                    ?>
                     <tr>
                         <td>
                             <strong><?php echo esc_html($matchup->team_a); ?></strong> vs <strong><?php echo esc_html($matchup->team_b); ?></strong>
-                            <?php if ($matchup->is_tiebreaker): ?><br><em style="font-size:0.9em;">(Tiebreaker Game)</em><?php endif; ?>
+                            <?php if ($matchup->is_tiebreaker): ?><br><em style=”font-size:0.9em;”>(Tiebreaker Game)</em><?php endif; ?>
                         </td>
+
+                        <?php if ($is_api_week): ?>
+                        <td class=”kf-score-cell”>
+                            <?php if ($has_espn && ($matchup->home_score !== null || $matchup->away_score !== null)): ?>
+                                <strong><?php echo intval($matchup->away_score); ?></strong> - <strong><?php echo intval($matchup->home_score); ?></strong>
+                            <?php elseif ($has_espn): ?>
+                                <span style=”color:#999;”>&mdash;</span>
+                            <?php else: ?>
+                                <span style=”color:#999;”>Manual</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class=”kf-status-cell”>
+                            <?php if ($has_espn): ?>
+                                <?php
+                                $status = $matchup->game_status ?? 'scheduled';
+                                $badge_class = 'kf-badge-scheduled';
+                                $badge_text = 'Scheduled';
+                                if ($status === 'final') {
+                                    $badge_class = 'kf-badge-final';
+                                    $badge_text = 'FINAL';
+                                } elseif ($status === 'in_progress') {
+                                    $badge_class = 'kf-badge-live';
+                                    $badge_text = 'LIVE';
+                                }
+                                ?>
+                                <span class=”kf-status-badge <?php echo esc_attr($badge_class); ?>”><?php echo esc_html($badge_text); ?></span>
+                                <?php if ($is_auto_filled): ?>
+                                    <br><small class=”kf-auto-tag”>Auto</small>
+                                <?php endif; ?>
+                            <?php endif; ?>
+                        </td>
+                        <?php endif; ?>
+
                         <td>
                             <?php if ($matchup->is_tiebreaker): ?>
-                                <input type="number" step="any"
-                                       name="results[<?php echo esc_attr($matchup->id); ?>]"
-                                       value="<?php echo esc_attr($matchup->result); ?>"
-                                       placeholder="Enter Total Points">
+                                <input type=”number” step=”any”
+                                       name=”results[<?php echo esc_attr($matchup->id); ?>]”
+                                       value=”<?php echo esc_attr($matchup->result); ?>”
+                                       placeholder=”Enter Total Points”>
                             <?php else: ?>
-                                <select name="results[<?php echo esc_attr($matchup->id); ?>]">
-                                    <option value="">-- Result Pending --</option>
-                                    <option value="<?php echo esc_attr($matchup->team_a); ?>" <?php selected($matchup->result, $matchup->team_a); ?>>
+                                <select name=”results[<?php echo esc_attr($matchup->id); ?>]”>
+                                    <option value=””>-- Result Pending --</option>
+                                    <option value=”<?php echo esc_attr($matchup->team_a); ?>” <?php selected($matchup->result, $matchup->team_a); ?>>
                                         <?php echo esc_html($matchup->team_a); ?>
                                     </option>
-                                    <option value="<?php echo esc_attr($matchup->team_b); ?>" <?php selected($matchup->result, $matchup->team_b); ?>>
+                                    <option value=”<?php echo esc_attr($matchup->team_b); ?>” <?php selected($matchup->result, $matchup->team_b); ?>>
                                         <?php echo esc_html($matchup->team_b); ?>
                                     </option>
-                                    <option value="TIE" <?php echo (strtolower((string)$matchup->result) === 'tie') ? 'selected' : ''; ?>>Tie</option>
+                                    <option value=”TIE” <?php echo (strtolower((string)$matchup->result) === 'tie') ? 'selected' : ''; ?>>Tie</option>
                                 </select>
                             <?php endif; ?>
                         </td>
@@ -120,19 +178,78 @@ function kf_enter_results_shortcode() {
                 </tbody>
             </table>
 
-            <div class="kf-form-actions" style="display:flex;justify-content:space-between;align-items:center;margin-top:1.5em;">
-                <button type="submit" name="save_results" class="kf-button">Save Results</button>
+            <?php if ($is_api_week): ?>
+                <p class=”kf-form-note” style=”margin-top:8px;”>
+                    <?php
+                    $final_count = 0;
+                    $total_api = 0;
+                    foreach ($matchups as $m) {
+                        if (!empty($m->espn_game_id)) {
+                            $total_api++;
+                            if ($m->game_status === 'final') $final_count++;
+                        }
+                    }
+                    ?>
+                    <?php echo intval($final_count); ?> of <?php echo intval($total_api); ?> API-linked games are final.
+                    Results marked “Auto” were filled by the score checker.
+                    You can override any result before finalizing.
+                </p>
+            <?php endif; ?>
+
+            <div class=”kf-form-actions” style=”display:flex;justify-content:space-between;align-items:center;margin-top:1.5em;”>
+                <button type=”submit” name=”save_results” class=”kf-button”>Save Results</button>
 
                 <?php if ($all_results_entered): ?>
-                    <a href="<?php echo esc_url(add_query_arg('week_id', $week_id, site_url('/week-summary/'))); ?>" class="kf-button kf-button-action">
+                    <a href=”<?php echo esc_url(add_query_arg('week_id', $week_id, site_url('/week-summary/'))); ?>” class=”kf-button kf-button-action”>
                         Proceed to Finalize &rarr;
                     </a>
                 <?php else: ?>
-                    <span style="font-size:0.9em;color:#777;">The "Finalize" button will appear here once all results are entered.</span>
+                    <span style=”font-size:0.9em;color:#777;”>The “Finalize” button will appear here once all results are entered.</span>
                 <?php endif; ?>
             </div>
         </form>
     </div>
+
+    <?php if ($is_api_week): ?>
+    <script>
+    function kfRefreshScores(weekId) {
+        var btn = document.getElementById('kf-refresh-scores-btn');
+        var statusDiv = document.getElementById('kf-refresh-status');
+        btn.disabled = true;
+        btn.textContent = 'Refreshing...';
+        statusDiv.style.display = 'block';
+        statusDiv.textContent = 'Checking ESPN for updated scores...';
+        statusDiv.className = 'notice notice-info';
+
+        var formData = new FormData();
+        formData.append('action', 'kf_refresh_scores');
+        formData.append('nonce', kf_ajax_data.nonce);
+        formData.append('week_id', weekId);
+
+        fetch(kf_ajax_data.ajax_url, { method: 'POST', body: formData })
+        .then(function(res) { return res.json(); })
+        .then(function(response) {
+            btn.disabled = false;
+            btn.innerHTML = '&#128260; Refresh Scores Now';
+            if (response.success) {
+                statusDiv.textContent = response.data.message + ' Reloading...';
+                statusDiv.className = 'notice notice-success';
+                setTimeout(function() { location.reload(); }, 1500);
+            } else {
+                statusDiv.textContent = response.data ? response.data.message : 'Error refreshing scores.';
+                statusDiv.className = 'notice notice-error';
+            }
+        })
+        .catch(function() {
+            btn.disabled = false;
+            btn.innerHTML = '&#128260; Refresh Scores Now';
+            statusDiv.textContent = 'Network error. Please try again.';
+            statusDiv.className = 'notice notice-error';
+        });
+    }
+    </script>
+    <?php endif; ?>
+
     <?php
     return ob_get_clean();
 }

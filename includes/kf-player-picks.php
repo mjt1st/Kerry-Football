@@ -151,9 +151,37 @@ function _kf_display_picks_form(
         <?php foreach ($matchups as $matchup):
             $saved_pick     = $existing_picks[$matchup->id] ?? null;
             $selected_point = (int)($saved_pick['point_value'] ?? 0);
+            $has_odds       = !empty($matchup->spread_home) || !empty($matchup->moneyline_home) || !empty($matchup->over_under);
             ?>
             <tr>
-                <td><?php echo esc_html($matchup->team_b . ' @ ' . $matchup->team_a); ?></td>
+                <td>
+                    <?php echo esc_html($matchup->team_b . ' @ ' . $matchup->team_a); ?>
+                    <?php // SPORTS API V1: Show odds below matchup name if available ?>
+                    <?php if ($has_odds): ?>
+                        <div class="kf-odds-line">
+                            <?php if ($matchup->spread_home !== null): ?>
+                                <span>Spread: <?php
+                                    $spread_val = floatval($matchup->spread_home);
+                                    $spread_display = ($spread_val > 0 ? '+' : '') . number_format($spread_val, 1);
+                                    // Figure out which team is the favorite
+                                    $fav_team = $spread_val < 0 ? esc_html($matchup->team_a) : esc_html($matchup->team_b);
+                                    $fav_spread = $spread_val < 0 ? $spread_display : (($matchup->spread_away !== null) ? (floatval($matchup->spread_away) > 0 ? '+' : '') . number_format(floatval($matchup->spread_away), 1) : '');
+                                    echo esc_html($fav_team) . ' ' . esc_html($fav_spread);
+                                ?></span>
+                            <?php endif; ?>
+                            <?php if ($matchup->over_under !== null): ?>
+                                <span>O/U: <?php echo esc_html(number_format(floatval($matchup->over_under), 1)); ?></span>
+                            <?php endif; ?>
+                            <?php if ($matchup->moneyline_home !== null && $matchup->moneyline_away !== null): ?>
+                                <span>ML: <?php
+                                    $ml_home = intval($matchup->moneyline_home);
+                                    $ml_away = intval($matchup->moneyline_away);
+                                    echo esc_html(($ml_home > 0 ? '+' : '') . $ml_home) . '/' . esc_html(($ml_away > 0 ? '+' : '') . $ml_away);
+                                ?></span>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+                </td>
                 <td>
                     <select name="<?php echo esc_attr($pick_name_prefix); ?>[<?php echo (int)$matchup->id; ?>]" required class="kf-pick-select">
                         <option value="">-- Select Winner --</option>
@@ -173,9 +201,29 @@ function _kf_display_picks_form(
         <?php endforeach; ?>
 
         <?php if ($tiebreaker_matchup):
-            $tb_saved = $existing_picks[$tiebreaker_matchup->id] ?? null; ?>
+            $tb_saved = $existing_picks[$tiebreaker_matchup->id] ?? null;
+            $tb_has_odds = !empty($tiebreaker_matchup->spread_home) || !empty($tiebreaker_matchup->over_under);
+            ?>
             <tr class="kf-tiebreaker-row">
-                <td><?php echo esc_html($tiebreaker_matchup->team_b . ' @ ' . $tiebreaker_matchup->team_a); ?> <strong>(Tiebreaker)</strong></td>
+                <td>
+                    <?php echo esc_html($tiebreaker_matchup->team_b . ' @ ' . $tiebreaker_matchup->team_a); ?> <strong>(Tiebreaker)</strong>
+                    <?php if ($tb_has_odds): ?>
+                        <div class="kf-odds-line">
+                            <?php if ($tiebreaker_matchup->spread_home !== null): ?>
+                                <span>Spread: <?php
+                                    $sp = floatval($tiebreaker_matchup->spread_home);
+                                    $sp_d = ($sp > 0 ? '+' : '') . number_format($sp, 1);
+                                    $fav = $sp < 0 ? esc_html($tiebreaker_matchup->team_a) : esc_html($tiebreaker_matchup->team_b);
+                                    $fav_sp = $sp < 0 ? $sp_d : (($tiebreaker_matchup->spread_away !== null) ? (floatval($tiebreaker_matchup->spread_away) > 0 ? '+' : '') . number_format(floatval($tiebreaker_matchup->spread_away), 1) : '');
+                                    echo esc_html($fav) . ' ' . esc_html($fav_sp);
+                                ?></span>
+                            <?php endif; ?>
+                            <?php if ($tiebreaker_matchup->over_under !== null): ?>
+                                <span>O/U: <?php echo esc_html(number_format(floatval($tiebreaker_matchup->over_under), 1)); ?></span>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+                </td>
                 <td><input type="number" step="any" inputmode="decimal" name="<?php echo esc_attr($pick_name_prefix); ?>[<?php echo (int)$tiebreaker_matchup->id; ?>]" value="<?php echo esc_attr($tb_saved['pick'] ?? ''); ?>" placeholder="Total Points" class="small-text" required></td>
                 <td><input type="hidden" name="<?php echo esc_attr($point_name_prefix); ?>[<?php echo (int)$tiebreaker_matchup->id; ?>]" value="0">Tiebreaker</td>
             </tr>

@@ -64,6 +64,11 @@ require_once KF_PLUGIN_PATH . 'includes/kf-week-summary-view.php';
 require_once KF_PLUGIN_PATH . 'includes/kf-notification-settings-view.php';
 
 
+// Sports API Integration
+require_once KF_PLUGIN_PATH . 'includes/kf-sports-api.php';
+require_once KF_PLUGIN_PATH . 'includes/kf-score-cron.php';
+require_once KF_PLUGIN_PATH . 'includes/kf-api-settings-view.php';
+
 // Importer tools
 require_once KF_PLUGIN_PATH . 'includes/kf-matchup-importer.php';
 if ( file_exists( KF_PLUGIN_PATH . 'includes/kf-data-importer.php' ) ) {
@@ -186,6 +191,138 @@ function kf_save_player_order_ajax_handler() {
 add_action('wp_ajax_kf_save_player_order', 'kf_save_player_order_ajax_handler');
 
 
+// ============================================================
+// SPORTS API V1: AJAX Handlers for Game Browser & Score Refresh
+// ============================================================
+
+/**
+ * AJAX handler: Fetch games from ESPN for the game browser.
+ * Commissioner-only. Returns normalized game data as JSON.
+ */
+function kf_ajax_fetch_games() {
+    check_ajax_referer('kf_season_switcher_nonce', 'nonce');
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(['message' => 'Permission denied.']);
+        return;
+    }
+
+    $sport = sanitize_text_field($_POST['sport'] ?? 'nfl');
+    $week  = sanitize_text_field($_POST['week'] ?? '');
+
+    if (empty($week)) {
+        wp_send_json_error(['message' => 'Please select a week.']);
+        return;
+    }
+
+    // Build ESPN params
+    $params = [];
+    if (is_numeric($week)) {
+        $params['week'] = intval($week);
+        // NFL regular season = seasontype 2, postseason = 3
+        if ($sport === 'nfl') {
+            $params['seasontype'] = 2; // Default to regular season
+        }
+    } else {
+        // Postseason week names for NFL
+        $postseason_map = [
+            'wildcard'    => ['week' => 1, 'seasontype' => 3],
+            'divisional'  => ['week' => 2, 'seasontype' => 3],
+            'conference'  => ['week' => 3, 'seasontype' => 3],
+            'superbowl'   => ['week' => 5, 'seasontype' => 3],
+        ];
+        if (isset($postseason_map[$week])) {
+            $params = $postseason_map[$week];
+        }
+    }
+
+    // College football conference filter
+    if ($sport === 'college-football' && !empty($_POST['conference'])) {
+        // ESPN uses group IDs for conferences
+        $conf_map = [
+            'sec'            => 8,
+            'big-ten'        => 5,
+            'big-12'         => 4,
+            'acc'            => 1,
+            'pac-12'         => 9,
+            'aac'            => 151,
+            'mountain-west'  => 17,
+            'sun-belt'       => 37,
+            'mac'            => 15,
+            'cusa'           => 12,
+        ];
+        $conf = sanitize_text_field($_POST['conference']);
+        if (isset($conf_map[$conf])) {
+            $params['groups'] = $conf_map[$conf];
+        }
+    }
+
+    $games = kf_espn_fetch_scoreboard($sport, $params);
+
+    if (is_wp_error($games)) {
+        wp_send_json_error(['message' => $games->get_error_message()]);
+        return;
+    }
+
+    if (empty($games)) {
+        wp_send_json_error(['message' => 'No games found for the selected week and sport.']);
+        return;
+    }
+
+    // Optionally fetch odds if API key is configured
+    $api_key = kf_get_odds_api_key();
+    if ($api_key) {
+        $odds = kf_odds_api_fetch_odds($sport);
+        if (!is_wp_error($odds)) {
+            $games = kf_match_espn_to_odds($games, $odds);
+        }
+    }
+
+    wp_send_json_success(['games' => $games, 'count' => count($games)]);
+}
+add_action('wp_ajax_kf_fetch_games', 'kf_ajax_fetch_games');
+
+/**
+ * AJAX handler: Refresh scores for a specific week.
+ * Commissioner-only. Triggers a manual score check via ESPN.
+ */
+function kf_ajax_refresh_scores() {
+    check_ajax_referer('kf_season_switcher_nonce', 'nonce');
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(['message' => 'Permission denied.']);
+        return;
+    }
+
+    $week_id = intval($_POST['week_id'] ?? 0);
+    if ($week_id <= 0) {
+        wp_send_json_error(['message' => 'Invalid week ID.']);
+        return;
+    }
+
+    $result = kf_refresh_week_scores($week_id);
+    wp_send_json_success($result);
+}
+add_action('wp_ajax_kf_refresh_scores', 'kf_ajax_refresh_scores');
+
+/**
+ * AJAX handler: Test The Odds API connection.
+ */
+function kf_ajax_test_odds_api() {
+    check_ajax_referer('kf_season_switcher_nonce', 'nonce');
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(['message' => 'Permission denied.']);
+        return;
+    }
+
+    $result = kf_test_odds_api_connection();
+    if ($result['success']) {
+        wp_send_json_success($result);
+    } else {
+        wp_send_json_error($result);
+    }
+}
+add_action('wp_ajax_kf_test_odds_api', 'kf_ajax_test_odds_api');
+
+
 /**
  * =============================================================
  * Plugin Activation / Deactivation Hooks
@@ -202,6 +339,10 @@ function kf_deactivate_plugin() {
     // NOTE: Session is started by the kf_start_session_early() function on 'init'.
     if (session_status() === PHP_SESSION_ACTIVE) {
         unset($_SESSION['kf_active_season_id']);
+    }
+    // SPORTS API V1: Unschedule the score-checking cron.
+    if (function_exists('kf_unschedule_score_cron')) {
+        kf_unschedule_score_cron();
     }
 }
 // --- END OF FILE: kerry-football-admin.php ---

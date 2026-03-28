@@ -94,11 +94,59 @@ function kf_week_setup_form() {
                 $team_b_list      = $_POST['team_b'] ?? []; // Away Team
                 $tiebreaker_index = isset($_POST['tiebreaker_marker']) ? intval($_POST['tiebreaker_marker']) : -1;
 
+                // SPORTS API V1: Optional ESPN/Odds fields (present when games added via Browse)
+                $espn_ids         = $_POST['espn_game_id'] ?? [];
+                $game_datetimes   = $_POST['game_datetime'] ?? [];
+                $odds_event_ids   = $_POST['odds_api_event_id'] ?? [];
+                $spreads_home     = $_POST['spread_home'] ?? [];
+                $spreads_away     = $_POST['spread_away'] ?? [];
+                $moneylines_home  = $_POST['moneyline_home'] ?? [];
+                $moneylines_away  = $_POST['moneyline_away'] ?? [];
+                $over_unders      = $_POST['over_under'] ?? [];
+
                 foreach ($team_a_list as $index => $teamA) {
                     $teamA = sanitize_text_field($teamA);
                     $teamB = sanitize_text_field($team_b_list[$index]);
                     if (!empty($teamA) && !empty($teamB)) {
-                        $matchup_data = [ 'week_id' => $week_id, 'team_a'  => $teamA, 'team_b'  => $teamB, ];
+                        $matchup_data = [
+                            'week_id' => $week_id,
+                            'team_a'  => $teamA,
+                            'team_b'  => $teamB,
+                        ];
+
+                        // Add ESPN/API fields if present (API mode)
+                        $espn_id = isset($espn_ids[$index]) ? sanitize_text_field($espn_ids[$index]) : '';
+                        if (!empty($espn_id)) {
+                            $matchup_data['espn_game_id']      = $espn_id;
+                            $matchup_data['game_status']        = 'scheduled';
+                        }
+                        if (!empty($game_datetimes[$index])) {
+                            // Convert ISO date to MySQL datetime
+                            $dt = sanitize_text_field($game_datetimes[$index]);
+                            $matchup_data['game_datetime'] = date('Y-m-d H:i:s', strtotime($dt));
+                        }
+                        if (!empty($odds_event_ids[$index])) {
+                            $matchup_data['odds_api_event_id'] = sanitize_text_field($odds_event_ids[$index]);
+                        }
+                        if (isset($spreads_home[$index]) && $spreads_home[$index] !== '') {
+                            $matchup_data['spread_home'] = floatval($spreads_home[$index]);
+                        }
+                        if (isset($spreads_away[$index]) && $spreads_away[$index] !== '') {
+                            $matchup_data['spread_away'] = floatval($spreads_away[$index]);
+                        }
+                        if (isset($moneylines_home[$index]) && $moneylines_home[$index] !== '') {
+                            $matchup_data['moneyline_home'] = intval($moneylines_home[$index]);
+                        }
+                        if (isset($moneylines_away[$index]) && $moneylines_away[$index] !== '') {
+                            $matchup_data['moneyline_away'] = intval($moneylines_away[$index]);
+                        }
+                        if (isset($over_unders[$index]) && $over_unders[$index] !== '') {
+                            $matchup_data['over_under'] = floatval($over_unders[$index]);
+                        }
+                        if (!empty($espn_id)) {
+                            $matchup_data['odds_updated_at'] = current_time('mysql', true);
+                        }
+
                         $wpdb->insert($matchups_table, array_merge($matchup_data, ['is_tiebreaker' => 0]));
                         if ($index === $tiebreaker_index) {
                             $wpdb->insert($matchups_table, array_merge($matchup_data, ['is_tiebreaker' => 1]));
@@ -191,6 +239,70 @@ function kf_week_setup_form() {
             <div class="notice notice-warning" style="margin-top: 20px;"><p><strong>Editing Locked:</strong> This week is published or finalized. To prevent issues with player picks, matchup details cannot be changed. You can still modify the deadline and re-publish to send an updated notification.</p></div>
         <?php elseif ($is_repair_mode): ?>
              <div class="notice notice-info" style="margin-top: 20px;"><p><strong>Repair Mode:</strong> This week appears to be missing game count and point data. Please fill in the required fields below and save to repair the week.</p></div>
+        <?php endif; ?>
+
+        <?php // SPORTS API V1: Game Browser Mode Toggle (only show for editable weeks) ?>
+        <?php if ($is_matchup_editable) : ?>
+            <?php $default_sport = get_option('kf_default_sport', 'nfl'); ?>
+            <div class="kf-mode-toggle" style="margin-top:1.5em;display:flex;gap:0;border-radius:6px;overflow:hidden;border:2px solid var(--kf-primary-color, #2196F3);max-width:400px;">
+                <button type="button" class="kf-mode-toggle-btn kf-mode-active" data-mode="manual" style="flex:1;padding:10px 16px;border:none;cursor:pointer;font-weight:bold;font-size:1em;transition:all 0.2s;">&#9998; Manual Entry</button>
+                <button type="button" class="kf-mode-toggle-btn" data-mode="api" style="flex:1;padding:10px 16px;border:none;cursor:pointer;font-weight:bold;font-size:1em;transition:all 0.2s;">&#127944; Browse Live Games</button>
+            </div>
+            <p class="kf-form-note" style="margin-top:6px;">
+                <strong>Browse Live Games</strong> pulls real games from ESPN — enables auto-scores and shows odds to players.<br>
+                <strong>Manual Entry</strong> works like before — you type team names and enter results yourself.
+            </p>
+
+            <div id="kf-game-browser" style="display:none;margin-top:1.5em;" class="kf-card">
+                <h3 style="margin-top:0;">Browse Games</h3>
+                <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:1em;">
+                    <div class="kf-form-group" style="margin-bottom:0;">
+                        <label for="kf-sport-select">Sport</label>
+                        <select id="kf-sport-select">
+                            <option value="nfl" <?php selected($default_sport, 'nfl'); ?>>NFL</option>
+                            <option value="college-football" <?php selected($default_sport, 'college-football'); ?>>College Football</option>
+                        </select>
+                    </div>
+                    <div class="kf-form-group" style="margin-bottom:0;">
+                        <label for="kf-week-select">Week</label>
+                        <select id="kf-week-select">
+                            <option value="">-- Select --</option>
+                            <?php for ($w = 1; $w <= 18; $w++) : ?>
+                                <option value="<?php echo $w; ?>">Week <?php echo $w; ?></option>
+                            <?php endfor; ?>
+                            <option value="wildcard">Wild Card</option>
+                            <option value="divisional">Divisional</option>
+                            <option value="conference">Conference</option>
+                            <option value="superbowl">Super Bowl</option>
+                        </select>
+                    </div>
+                    <div class="kf-form-group" id="kf-conference-group" style="margin-bottom:0;display:none;">
+                        <label for="kf-conference-filter">Conference</label>
+                        <select id="kf-conference-filter">
+                            <option value="">All Conferences</option>
+                            <option value="sec">SEC</option>
+                            <option value="big-ten">Big Ten</option>
+                            <option value="big-12">Big 12</option>
+                            <option value="acc">ACC</option>
+                            <option value="pac-12">Pac-12</option>
+                            <option value="aac">AAC</option>
+                            <option value="mountain-west">Mountain West</option>
+                            <option value="sun-belt">Sun Belt</option>
+                            <option value="mac">MAC</option>
+                            <option value="cusa">Conference USA</option>
+                        </select>
+                    </div>
+                    <button type="button" id="kf-fetch-games-btn" class="kf-button" style="white-space:nowrap;">Fetch Games</button>
+                </div>
+
+                <div id="kf-browser-status" class="kf-browser-status" style="display:none;"></div>
+                <div id="kf-games-list"></div>
+
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1em;padding-top:1em;border-top:1px solid #ddd;">
+                    <span>Selected: <strong id="kf-selected-count">0</strong> game(s)</span>
+                    <button type="button" id="kf-add-selected-btn" class="kf-button kf-button-action" disabled>Add Selected Games</button>
+                </div>
+            </div>
         <?php endif; ?>
 
         <form method="POST" id="week-edit-form" class="kf-card kf-tracked-form" style="margin-top: 1.5em;">

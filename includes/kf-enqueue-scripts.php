@@ -59,6 +59,26 @@ function kf_enqueue_assets() {
                 'active_season_id' => $_SESSION['kf_active_season_id'] ?? 0,
             ]
         );
+
+        // SPORTS API V1: Load game browser JS on pages that use the week-setup shortcode.
+        // Also loaded on enter-results pages for the refresh scores button.
+        global $post;
+        $load_game_browser = false;
+        if ( $post && is_a( $post, 'WP_Post' ) ) {
+            if ( has_shortcode( $post->post_content, 'kf_week_setup' ) ||
+                 has_shortcode( $post->post_content, 'kf_enter_results' ) ) {
+                $load_game_browser = true;
+            }
+        }
+        if ( $load_game_browser && current_user_can( 'manage_options' ) ) {
+            wp_enqueue_script(
+                'kerry-football-game-browser',
+                $plugin_base_url . 'assets/js/kf-game-browser.js',
+                [ 'jquery', 'kerry-football-main-js' ],
+                '1.0.0',
+                true
+            );
+        }
     }
 }
 // Add our function to the 'wp_enqueue_scripts' hook.

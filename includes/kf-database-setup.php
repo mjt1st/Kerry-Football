@@ -79,6 +79,7 @@ function kf_install_db() {
 
     // --- edk_matchups ---
     // Stores the individual games for each week.
+    // SPORTS API V1: Added columns for ESPN game tracking, live scores, and betting odds.
     $sql_matchups = "CREATE TABLE {$wpdb->prefix}matchups (
         id INT AUTO_INCREMENT,
         week_id INT NOT NULL,
@@ -86,8 +87,33 @@ function kf_install_db() {
         team_b VARCHAR(64) NOT NULL,
         result VARCHAR(64) DEFAULT NULL,
         is_tiebreaker TINYINT(1) DEFAULT 0,
+        espn_game_id VARCHAR(20) DEFAULT NULL,
+        odds_api_event_id VARCHAR(64) DEFAULT NULL,
+        game_datetime DATETIME DEFAULT NULL,
+        home_score INT DEFAULT NULL,
+        away_score INT DEFAULT NULL,
+        game_status VARCHAR(20) DEFAULT NULL,
+        spread_home DECIMAL(4,1) DEFAULT NULL,
+        spread_away DECIMAL(4,1) DEFAULT NULL,
+        moneyline_home INT DEFAULT NULL,
+        moneyline_away INT DEFAULT NULL,
+        over_under DECIMAL(4,1) DEFAULT NULL,
+        odds_updated_at DATETIME DEFAULT NULL,
         PRIMARY KEY  (id),
         KEY week_id (week_id)
+    ) $charset_collate;";
+
+    // --- edk_api_usage ---
+    // SPORTS API V1: Tracks API credit usage per month (primarily for The Odds API free tier).
+    $sql_api_usage = "CREATE TABLE {$wpdb->prefix}api_usage (
+        id INT AUTO_INCREMENT,
+        api_name VARCHAR(32) NOT NULL,
+        endpoint VARCHAR(128) NOT NULL,
+        credits_used INT DEFAULT 1,
+        requested_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        month_key VARCHAR(7) NOT NULL,
+        PRIMARY KEY  (id),
+        KEY month_key (month_key)
     ) $charset_collate;";
 
     // --- edk_picks ---
@@ -188,6 +214,7 @@ function kf_install_db() {
     dbDelta( $sql_season_player_order );
     dbDelta( $sql_weeks );
     dbDelta( $sql_matchups );
+    dbDelta( $sql_api_usage );
     dbDelta( $sql_picks );
     dbDelta( $sql_scores );
     dbDelta( $sql_score_history );
