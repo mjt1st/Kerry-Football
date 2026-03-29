@@ -62,6 +62,7 @@ require_once KF_PLUGIN_PATH . 'includes/kf-create-season-view.php';
 require_once KF_PLUGIN_PATH . 'includes/kf-week-setup.php';
 require_once KF_PLUGIN_PATH . 'includes/kf-week-summary-view.php';
 require_once KF_PLUGIN_PATH . 'includes/kf-notification-settings-view.php';
+require_once KF_PLUGIN_PATH . 'includes/kf-admin-dashboard.php';
 
 
 // Sports API Integration
@@ -326,6 +327,31 @@ function kf_ajax_test_odds_api() {
 }
 add_action('wp_ajax_kf_test_odds_api', 'kf_ajax_test_odds_api');
 
+
+/**
+ * =============================================================
+ * Blocked User Login Prevention
+ * =============================================================
+ */
+
+/**
+ * Prevent blocked users from logging in.
+ * Runs after WordPress validates credentials — returns a WP_Error
+ * if the account has been flagged via the admin dashboard.
+ */
+function kf_block_user_login( $user, $username, $password ) {
+    if ( is_wp_error( $user ) ) {
+        return $user; // Already failed auth — pass through
+    }
+    if ( $user instanceof WP_User && get_user_meta( $user->ID, 'kf_account_blocked', true ) == '1' ) {
+        return new WP_Error(
+            'account_blocked',
+            __( 'Your account has been suspended. Please contact the league commissioner.' )
+        );
+    }
+    return $user;
+}
+add_filter( 'authenticate', 'kf_block_user_login', 30, 3 );
 
 /**
  * =============================================================

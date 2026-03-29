@@ -36,5 +36,8 @@ function kf_register_shortcodes() {
     // SPORTS API V1: Settings page for ESPN/Odds API configuration.
     add_shortcode('kf_api_settings', 'kf_api_settings_shortcode');
 
+    // Site admin dashboard (user management, league health).
+    add_shortcode('kf_admin_dashboard', 'kf_admin_dashboard_shortcode');
+
     // COMMENT: Removed a duplicate registration for 'kf_edit_season' that pointed to an old function name.
 }
