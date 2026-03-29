@@ -34,6 +34,7 @@ function kf_install_db() {
         dd_enabled_week INT DEFAULT 9,
         is_active TINYINT(1) DEFAULT 1,
         sport_type VARCHAR(20) DEFAULT 'nfl',
+        created_by BIGINT UNSIGNED DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY  (id)
     ) $charset_collate;";

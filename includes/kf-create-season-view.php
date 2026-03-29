@@ -75,6 +75,7 @@ function kf_create_season_shortcode() {
                     'dd_max_uses'             => $dd_max,
                     'dd_enabled_week'         => $dd_week,
                     'sport_type'              => $sport_type,
+                    'created_by'              => get_current_user_id(),
                     'is_active'               => 1 // New seasons are active by default.
                 ]);
 

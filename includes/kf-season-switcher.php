@@ -9,6 +9,42 @@
 
 if (!defined('ABSPATH')) exit;
 
+/**
+ * Central access-control helper.
+ *
+ * A user can manage a season if they created it OR are enrolled as an
+ * accepted participant. Site-level admins (manage_options) are NOT
+ * automatically granted access to every season — they still need to
+ * be the creator or an accepted participant, keeping leagues isolated.
+ *
+ * Exception: the Site Admin Dashboard bypasses this because it is a
+ * site-management tool, not a league-management tool.
+ *
+ * @param  int      $season_id
+ * @param  int|null $user_id   Defaults to current user.
+ * @return bool
+ */
+function kf_can_manage_season( $season_id, $user_id = null ) {
+    if ( ! $user_id ) {
+        $user_id = get_current_user_id();
+    }
+    global $wpdb;
+
+    // Created this season?
+    $is_creator = (bool) $wpdb->get_var( $wpdb->prepare(
+        "SELECT COUNT(*) FROM {$wpdb->prefix}seasons WHERE id = %d AND created_by = %d",
+        $season_id, $user_id
+    ) );
+    if ( $is_creator ) return true;
+
+    // Accepted participant (includes co-commissioners who were invited)?
+    return (bool) $wpdb->get_var( $wpdb->prepare(
+        "SELECT COUNT(*) FROM {$wpdb->prefix}season_players
+         WHERE season_id = %d AND user_id = %d AND status = 'accepted'",
+        $season_id, $user_id
+    ) );
+}
+
 // Manage session for active season
 function kf_manage_active_season_session() {
     if (!is_user_logged_in()) { return; }
@@ -22,9 +58,14 @@ function kf_manage_active_season_session() {
     $cache_key = 'kf_default_season_' . $user_id;
     $default_season_id = get_transient($cache_key);
     if (false === $default_season_id) {
+        // Try: most recent active season the user is accepted in.
+        // Also pick up seasons they created even if they aren't in season_players yet.
         $default_season_id = $wpdb->get_var($wpdb->prepare(
-            "SELECT s.id FROM {$wpdb->prefix}seasons s JOIN {$wpdb->prefix}season_players sp ON s.id = sp.season_id WHERE sp.user_id = %d AND sp.status = 'accepted' AND s.is_active = 1 ORDER BY s.id DESC LIMIT 1",
-            $user_id
+            "SELECT s.id FROM {$wpdb->prefix}seasons s
+             LEFT JOIN {$wpdb->prefix}season_players sp ON s.id = sp.season_id AND sp.user_id = %d AND sp.status = 'accepted'
+             WHERE s.is_active = 1 AND (sp.user_id IS NOT NULL OR s.created_by = %d)
+             ORDER BY s.id DESC LIMIT 1",
+            $user_id, $user_id
         ));
         set_transient($cache_key, $default_season_id, 3600);
     }
@@ -46,25 +87,9 @@ function kf_ajax_set_active_season() {
     $redirect_url = isset($_POST['redirect_url']) ? esc_url_raw($_POST['redirect_url']) : site_url('/season-summary/');
 
     if ($season_id > 0) {
-        global $wpdb;
 
-        // Check if user is a participant OR a commissioner (commissioners can access all seasons)
-        $is_commissioner = current_user_can('manage_options');
-        $season_exists = false;
-        if ($is_commissioner) {
-            // Commissioners can switch to any season
-            $season_exists = $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(*) FROM {$wpdb->prefix}seasons WHERE id = %d", $season_id
-            ));
-        } else {
-            $season_exists = $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(*) FROM {$wpdb->prefix}seasons s JOIN {$wpdb->prefix}season_players sp ON s.id = sp.season_id WHERE s.id = %d AND sp.user_id = %d AND sp.status = 'accepted'",
-                $season_id,
-                get_current_user_id()
-            ));
-        }
-
-        if ($season_exists) {
+        // Use central helper — user must be creator or accepted participant.
+        if ( kf_can_manage_season( $season_id, get_current_user_id() ) ) {
             $_SESSION['kf_active_season_id'] = $season_id;
             delete_transient('kf_default_season_' . get_current_user_id());
             

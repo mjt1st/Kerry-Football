@@ -91,7 +91,15 @@ function kf_commissioner_dashboard_shortcode() {
         }
     }
 
-    $seasons = $wpdb->get_results("SELECT * FROM $seasons_table ORDER BY is_active DESC, id DESC");
+    // Only show seasons this user created or is enrolled in as an accepted participant.
+    $current_user_id = get_current_user_id();
+    $seasons = $wpdb->get_results( $wpdb->prepare(
+        "SELECT DISTINCT s.* FROM $seasons_table s
+         LEFT JOIN {$wpdb->prefix}season_players sp ON s.id = sp.season_id AND sp.user_id = %d AND sp.status = 'accepted'
+         WHERE s.created_by = %d OR sp.user_id IS NOT NULL
+         ORDER BY s.is_active DESC, s.id DESC",
+        $current_user_id, $current_user_id
+    ) );
 
     ob_start();
     ?>
