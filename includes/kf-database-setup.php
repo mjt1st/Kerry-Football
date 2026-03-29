@@ -230,3 +230,31 @@ function kf_install_db() {
     dbDelta( $sql_dd_selections );
     dbDelta( $sql_pending_picks );
 }
+
+/**
+ * Incremental DB upgrade runner.
+ *
+ * Runs on every 'init' but exits immediately once the stored version matches
+ * the current schema version. Add a new block inside for every future column
+ * or table addition — this avoids ever needing a manual ALTER TABLE on the
+ * live database after a plugin update.
+ */
+function kf_maybe_upgrade_db() {
+    $installed = get_option( 'kf_db_version', '1.0' );
+
+    // Nothing to do if schema is current.
+    if ( version_compare( $installed, '1.1', '>=' ) ) {
+        return;
+    }
+
+    global $wpdb;
+
+    // v1.1 — Add is_commissioner column to season_players (co-commissioner feature).
+    $existing_cols = $wpdb->get_col( "DESCRIBE {$wpdb->prefix}season_players", 0 );
+    if ( ! in_array( 'is_commissioner', $existing_cols, true ) ) {
+        $wpdb->query( "ALTER TABLE {$wpdb->prefix}season_players ADD COLUMN is_commissioner TINYINT(1) NOT NULL DEFAULT 0" );
+    }
+
+    update_option( 'kf_db_version', '1.1' );
+}
+add_action( 'init', 'kf_maybe_upgrade_db' );
