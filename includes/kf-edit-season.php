@@ -42,12 +42,14 @@ function kf_edit_season_form_shortcode() {
     if ('POST' === $_SERVER['REQUEST_METHOD'] && isset($_POST['kf_update_season_nonce'])) {
         if (wp_verify_nonce($_POST['kf_update_season_nonce'], 'kf_update_season_action')) {
             
+            $sport_type = in_array($_POST['sport_type'] ?? '', ['nfl', 'college-football']) ? $_POST['sport_type'] : 'nfl';
             $update_data = [
-                'name' => sanitize_text_field($_POST['season_name']),
+                'name'              => sanitize_text_field($_POST['season_name']),
                 'mwow_bonus_points' => intval($_POST['mwow_bonus_points']),
-                'dd_max_uses' => intval($_POST['dd_max_uses']),
-                'dd_enabled_week' => intval($_POST['dd_enabled_week']),
-                'is_active' => isset($_POST['is_active']) ? 1 : 0,
+                'dd_max_uses'       => intval($_POST['dd_max_uses']),
+                'dd_enabled_week'   => intval($_POST['dd_enabled_week']),
+                'sport_type'        => $sport_type,
+                'is_active'         => isset($_POST['is_active']) ? 1 : 0,
             ];
 
             if (isset($_POST['num_weeks'])) {
@@ -83,6 +85,15 @@ function kf_edit_season_form_shortcode() {
             <div class="kf-form-group">
                 <label for="season_name">Season Name</label>
                 <input type="text" id="season_name" name="season_name" value="<?php echo esc_attr($season->name); ?>" required>
+            </div>
+
+            <div class="kf-form-group">
+                <label for="sport_type">Sport Type</label>
+                <select id="sport_type" name="sport_type">
+                    <option value="nfl" <?php selected($season->sport_type ?? 'nfl', 'nfl'); ?>>NFL (Pro Football)</option>
+                    <option value="college-football" <?php selected($season->sport_type ?? 'nfl', 'college-football'); ?>>College Football (NCAAF)</option>
+                </select>
+                <p class="kf-form-note">Sets the default sport when browsing live games for this season's weeks.</p>
             </div>
 
             <div class="kf-form-group">

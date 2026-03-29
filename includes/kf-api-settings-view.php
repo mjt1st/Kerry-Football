@@ -132,12 +132,12 @@ function kf_api_settings_shortcode() {
                 <legend>General Settings</legend>
 
                 <div class="kf-form-group">
-                    <label for="kf_default_sport">Default Sport</label>
+                    <label for="kf_default_sport">Fallback Sport</label>
                     <select id="kf_default_sport" name="kf_default_sport" style="max-width:250px;">
                         <option value="nfl" <?php selected( $current_sport, 'nfl' ); ?>>NFL (Pro Football)</option>
                         <option value="college-football" <?php selected( $current_sport, 'college-football' ); ?>>College Football (NCAAF)</option>
                     </select>
-                    <p class="kf-form-note">Default sport shown when browsing games in Week Setup.</p>
+                    <p class="kf-form-note">Used only if a season does not have a sport type set. Each season's sport type is configured in <strong>Create Season</strong> or <strong>Edit Season</strong>.</p>
                 </div>
 
                 <div class="kf-form-group">

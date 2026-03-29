@@ -206,7 +206,11 @@ function kf_ajax_fetch_games() {
         return;
     }
 
+    // Sport comes from the form, but validate it against the active season's sport_type as a sanity check
     $sport = sanitize_text_field($_POST['sport'] ?? 'nfl');
+    if (!in_array($sport, ['nfl', 'college-football'])) {
+        $sport = 'nfl';
+    }
     $week  = sanitize_text_field($_POST['week'] ?? '');
 
     if (empty($week)) {

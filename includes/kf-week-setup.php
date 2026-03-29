@@ -243,7 +243,10 @@ function kf_week_setup_form() {
 
         <?php // SPORTS API V1: Game Browser Mode Toggle (only show for editable weeks) ?>
         <?php if ($is_matchup_editable) : ?>
-            <?php $default_sport = get_option('kf_default_sport', 'nfl'); ?>
+            <?php
+            // Use the season's sport_type if set, fall back to global option, then 'nfl'
+            $default_sport = !empty($season->sport_type) ? $season->sport_type : get_option('kf_default_sport', 'nfl');
+            ?>
             <div class="kf-mode-toggle" style="margin-top:1.5em;display:flex;gap:0;border-radius:6px;overflow:hidden;border:2px solid var(--kf-primary-color, #2196F3);max-width:400px;">
                 <button type="button" class="kf-mode-toggle-btn kf-mode-active" data-mode="manual" style="flex:1;padding:10px 16px;border:none;cursor:pointer;font-weight:bold;font-size:1em;transition:all 0.2s;">&#9998; Manual Entry</button>
                 <button type="button" class="kf-mode-toggle-btn" data-mode="api" style="flex:1;padding:10px 16px;border:none;cursor:pointer;font-weight:bold;font-size:1em;transition:all 0.2s;">&#127944; Browse Live Games</button>

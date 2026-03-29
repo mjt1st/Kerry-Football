@@ -50,6 +50,7 @@ function kf_create_season_shortcode() {
             $mwow_bonus         = intval($_POST['mwow_bonus']);
             $dd_max             = intval($_POST['dd_max']);
             $dd_week            = intval($_POST['dd_start_week']);
+            $sport_type         = in_array($_POST['sport_type'] ?? '', ['nfl', 'college-football']) ? $_POST['sport_type'] : 'nfl';
 
             $seasons_table = $wpdb->prefix . 'seasons';
 
@@ -73,6 +74,7 @@ function kf_create_season_shortcode() {
                     'mwow_bonus_points'       => $mwow_bonus,
                     'dd_max_uses'             => $dd_max,
                     'dd_enabled_week'         => $dd_week,
+                    'sport_type'              => $sport_type,
                     'is_active'               => 1 // New seasons are active by default.
                 ]);
 
@@ -113,6 +115,15 @@ function kf_create_season_shortcode() {
         <form method="POST" class="kf-tracked-form">
             <?php wp_nonce_field('kf_create_season'); ?>
             <p><label>Season Name<br><input type="text" name="season_name" required></label></p>
+            <p>
+                <label>Sport Type<br>
+                    <select name="sport_type">
+                        <option value="nfl">NFL (Pro Football)</option>
+                        <option value="college-football">College Football (NCAAF)</option>
+                    </select>
+                </label>
+                <span style="display:block;font-size:0.85em;color:#777;margin-top:4px;">Sets the default sport when browsing live games for this season's weeks.</span>
+            </p>
             <p><label>Number of Weeks<br><input type="number" name="num_weeks" required></label></p>
             <p><label>Weekly Point Total<br><input type="number" name="weekly_point_total" required></label></p>
             <p><label>Default Matchup Count<br><input type="number" name="default_matchup_count" required></label></p>
