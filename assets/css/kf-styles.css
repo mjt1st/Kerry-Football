@@ -654,6 +654,17 @@
 .kf-browser-fetch-row .kf-form-group { margin-bottom: 0; }
 .kf-browser-fetch-row select { min-width: 130px; }
 
+/* Week quick-setup bar (Step 1 at top of week setup form) */
+.kf-week-quick-setup {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5em;
+    align-items: flex-start;
+}
+@media (max-width: 600px) {
+    .kf-week-quick-setup { flex-direction: column; gap: 1em; }
+}
+
 /* Locked sport display (sport is set at season creation, not changeable here) */
 .kf-sport-locked-display {
     display: inline-block;

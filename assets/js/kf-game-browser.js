@@ -209,6 +209,43 @@
             updateSportControls();
         }
 
+        // ---- League week # → ESPN calendar week auto-sync + duplicate guard ----
+        var leagueWeekInput = document.getElementById('week_number');
+        var dupWarning      = document.getElementById('kf-week-dup-warning');
+        var setupCard       = document.querySelector('[data-existing-weeks]');
+        var existingWeeks   = setupCard
+            ? setupCard.getAttribute('data-existing-weeks').split(',').map(Number).filter(Boolean)
+            : [];
+
+        function syncLeagueWeek() {
+            if (!leagueWeekInput || !weekSelect) return;
+            var n = parseInt(leagueWeekInput.value, 10);
+
+            // Auto-fill ESPN week when value is a valid regular-season week
+            if (n >= 1 && n <= 18) {
+                weekSelect.value = String(n);
+            }
+
+            // Duplicate week warning
+            var isDup = !isNaN(n) && existingWeeks.indexOf(n) !== -1;
+            if (dupWarning) dupWarning.style.display = isDup ? 'block' : 'none';
+
+            updateSelectedCount();
+        }
+
+        if (leagueWeekInput) {
+            leagueWeekInput.addEventListener('input',  syncLeagueWeek);
+            leagueWeekInput.addEventListener('change', syncLeagueWeek);
+            syncLeagueWeek(); // Sync on page load
+        }
+
+        // Re-run counter when matchup count changes (so Y stays current)
+        var matchupCountWatcher = document.getElementById('kf_matchup_count');
+        if (matchupCountWatcher) {
+            matchupCountWatcher.addEventListener('input',  updateSelectedCount);
+            matchupCountWatcher.addEventListener('change', updateSelectedCount);
+        }
+
         // ---- Division / sort / spread filters: re-render existing results ----
         if (divFilter)   divFilter.addEventListener('change',   function () { if (fetchedGames.length) renderGames(getFilteredSorted()); });
         if (sortSelect)  sortSelect.addEventListener('change',  function () { if (fetchedGames.length) renderGames(getFilteredSorted()); });
@@ -533,11 +570,28 @@
 
         // ---- Helpers ----
         function updateSelectedCount() {
-            var n    = gamesList.querySelectorAll('.kf-game-checkbox:checked').length;
-            var text = n + ' of ' + displayedTotal + ' games selected';
-            // Update all counter elements (top bar + bottom footer)
+            var n      = gamesList.querySelectorAll('.kf-game-checkbox:checked').length;
+            var mcInp  = document.getElementById('kf_matchup_count');
+            var needed = mcInp ? (parseInt(mcInp.value, 10) || 0) : 0;
+
+            var text, color, bold;
+            if (needed > 0) {
+                text  = n + ' of ' + needed + ' games selected';
+                bold  = (n === needed);
+                if      (n === 0)      { color = '#6b7280'; }   // grey  — nothing yet
+                else if (n < needed)   { color = '#2563eb'; }   // blue  — picking
+                else if (n === needed) { color = '#166534'; }   // green — exactly right
+                else                   { color = '#d97706'; }   // amber — too many
+            } else {
+                text  = n + ' game(s) selected';
+                color = '#6b7280';
+                bold  = false;
+            }
+
             document.querySelectorAll('.kf-selected-count-text').forEach(function (el) {
-                el.textContent = text;
+                el.textContent   = text;
+                el.style.color   = color;
+                el.style.fontWeight = bold ? 'bold' : '';
             });
             if (addBtn) addBtn.disabled = n === 0;
         }

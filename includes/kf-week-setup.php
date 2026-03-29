@@ -241,51 +241,111 @@ function kf_week_setup_form() {
              <div class="notice notice-info" style="margin-top: 20px;"><p><strong>Repair Mode:</strong> This week appears to be missing game count and point data. Please fill in the required fields below and save to repair the week.</p></div>
         <?php endif; ?>
 
-        <?php // SPORTS API V1: Game Browser Mode Toggle (only show for editable weeks) ?>
-        <?php if ($is_matchup_editable) : ?>
-            <?php
-            // Use the season's sport_type if set, fall back to global option, then 'nfl'
-            $default_sport = !empty($season->sport_type) ? $season->sport_type : get_option('kf_default_sport', 'nfl');
-            ?>
-            <div class="kf-mode-toggle" style="margin-top:1.5em;display:flex;gap:0;border-radius:6px;overflow:hidden;border:2px solid var(--kf-primary-color, #2196F3);max-width:400px;">
-                <button type="button" class="kf-mode-toggle-btn kf-mode-active" data-mode="manual" style="flex:1;padding:10px 16px;border:none;cursor:pointer;font-weight:bold;font-size:1em;transition:all 0.2s;">&#9998; Manual Entry</button>
-                <button type="button" class="kf-mode-toggle-btn" data-mode="api" style="flex:1;padding:10px 16px;border:none;cursor:pointer;font-weight:bold;font-size:1em;transition:all 0.2s;">&#127944; Browse Live Games</button>
+        <?php
+        // Pre-calculate existing weeks for duplicate guard + next-available pre-fill
+        $existing_week_numbers = array_map( 'intval', $wpdb->get_col( $wpdb->prepare(
+            "SELECT week_number FROM {$wpdb->prefix}weeks WHERE season_id = %d ORDER BY week_number ASC",
+            $season_id
+        ) ) );
+        // In edit mode, exclude the week being edited from the "used" list
+        if ( $edit_mode && $week ) {
+            $existing_week_numbers = array_values( array_diff( $existing_week_numbers, [ intval( $week->week_number ) ] ) );
+        }
+        $next_week = 1;
+        while ( in_array( $next_week, $existing_week_numbers ) ) { $next_week++; }
+        $default_week_val = $edit_mode ? ( $week->week_number ?? '' ) : $next_week;
+
+        // Sport / display settings for game browser
+        $default_sport    = ! empty( $season->sport_type ) ? $season->sport_type : get_option( 'kf_default_sport', 'nfl' );
+        $sport_label      = $default_sport === 'college-football' ? 'College Football' : 'NFL';
+        $is_college       = $default_sport === 'college-football';
+        $division_display = $is_college ? 'none'  : 'block';
+        $conf_display     = $is_college ? 'block' : 'none';
+        $show_postseason  = ! $is_college;
+        ?>
+
+        <form method="POST" id="week-edit-form" class="kf-tracked-form" style="margin-top:1.5em;">
+            <?php wp_nonce_field('kf_week_action', 'kf_week_nonce'); ?>
+
+            <!-- ═══════════════════════════════════════════════════════════
+                 STEP 1 — Week basics: fill these before browsing or typing
+                 ═══════════════════════════════════════════════════════════ -->
+            <div class="kf-card" style="margin-bottom:1.25em;"
+                 data-existing-weeks="<?php echo esc_attr( implode( ',', $existing_week_numbers ) ); ?>">
+                <div class="kf-week-quick-setup">
+
+                    <div class="kf-form-group" style="margin-bottom:0;">
+                        <label for="week_number" style="font-weight:bold;">League Week #</label>
+                        <input type="number" id="week_number" name="week_number"
+                               value="<?php echo esc_attr( $default_week_val ); ?>"
+                               min="1" max="30" required style="max-width:80px;display:block;">
+                        <p class="kf-form-note" style="margin-top:3px;">
+                            Next available: <strong>Week <?php echo $next_week; ?></strong>
+                            <?php if ( ! empty( $existing_week_numbers ) ) : ?>
+                                &nbsp;&middot;&nbsp; Used: <?php echo implode(', ', $existing_week_numbers); ?>
+                            <?php endif; ?>
+                        </p>
+                        <p id="kf-week-dup-warning" style="display:none;color:#c0392b;font-weight:bold;font-size:0.85em;margin-top:4px;">
+                            &#9888; This week number already exists for this season!
+                        </p>
+                    </div>
+
+                    <div class="kf-form-group" style="margin-bottom:0;" <?php if (!$is_matchup_editable && !$is_repair_mode) echo 'style="opacity:0.65;"'; ?>>
+                        <label for="kf_matchup_count" style="font-weight:bold;">Games This Week</label>
+                        <input type="number" id="kf_matchup_count" name="matchup_count"
+                               value="<?php echo esc_attr( $matchup_count_val ); ?>"
+                               min="1" max="20" style="max-width:70px;display:block;"
+                               <?php if ($edit_mode && !$is_repair_mode) echo 'readonly'; ?>>
+                        <?php if ($edit_mode && !$is_repair_mode) : ?>
+                            <p class="kf-form-note" style="margin-top:3px;">Fixed after creation.</p>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="kf-form-group" style="margin-bottom:0;flex:1;min-width:220px;">
+                        <label for="deadline" style="font-weight:bold;">Picks Deadline</label>
+                        <input type="datetime-local" id="deadline" name="deadline"
+                               value="<?php echo esc_attr($week ? get_date_from_gmt($week->submission_deadline, 'Y-m-d\TH:i') : ''); ?>"
+                               required style="display:block;">
+                        <p class="kf-form-note" style="margin-top:3px;">Your local time.</p>
+                    </div>
+
+                </div>
             </div>
-            <p class="kf-form-note" style="margin-top:6px;">
-                <strong>Browse Live Games</strong> pulls real games from ESPN — enables auto-scores and shows odds to players.<br>
-                <strong>Manual Entry</strong> works like before — you type team names and enter results yourself.
+
+            <?php if ($is_matchup_editable) : ?>
+            <!-- ═══════════════════════════════════════════════════════════
+                 STEP 2 — Add games: browse ESPN live or enter manually
+                 ═══════════════════════════════════════════════════════════ -->
+            <div class="kf-mode-toggle" style="display:flex;gap:0;border-radius:6px;overflow:hidden;border:2px solid var(--kf-primary-color, #2196F3);max-width:420px;">
+                <button type="button" class="kf-mode-toggle-btn kf-mode-active" data-mode="manual"
+                        style="flex:1;padding:10px 16px;border:none;cursor:pointer;font-weight:bold;font-size:1em;transition:all 0.2s;">&#9998; Manual Entry</button>
+                <button type="button" class="kf-mode-toggle-btn" data-mode="api"
+                        style="flex:1;padding:10px 16px;border:none;cursor:pointer;font-weight:bold;font-size:1em;transition:all 0.2s;">&#127944; Browse Live Games</button>
+            </div>
+            <p class="kf-form-note" style="margin-top:6px;margin-bottom:1.25em;">
+                <strong>Browse Live Games</strong> pulls real games from ESPN &mdash; enables auto-scores and shows odds to players.&nbsp;
+                <strong>Manual Entry</strong> works like before &mdash; type team names yourself.
             </p>
 
-            <div id="kf-game-browser" style="display:none;margin-top:1.5em;" class="kf-card">
-                <h3 style="margin-top:0;">Browse Games</h3>
+            <div id="kf-game-browser" style="display:none;" class="kf-card" style="margin-bottom:1.25em;">
+                <h3 style="margin-top:0;">&#127944; Browse Games</h3>
                 <p class="kf-form-note" style="margin-bottom:1em;">
-                    &#128203; Odds (spread, O/U, moneyline) are pulled from ESPN at fetch time and shown on the picks form.
-                    <strong>Odds only appear for upcoming games</strong> &mdash; ESPN does not include betting lines for past or completed games.
-                    Off-season testing will show games without odds; during the season odds will populate automatically.
+                    Spread, O/U, and moneyline are pulled from ESPN at fetch time and shown on the picks form.
+                    <strong>Odds only appear for upcoming games</strong> &mdash; ESPN does not post lines for completed games.
                 </p>
 
-                <?php
-                // Determine display names and initial filter visibility
-                $sport_label      = $default_sport === 'college-football' ? 'College Football' : 'NFL';
-                $is_college       = $default_sport === 'college-football';
-                $division_display = $is_college ? 'none'  : 'block';
-                $conf_display     = $is_college ? 'block' : 'none';
-                // Postseason weeks only make sense for NFL
-                $show_postseason  = ! $is_college;
-                ?>
-                <!-- Row 1: Sport (locked) / Week / Conference (college) / Division (NFL) + Fetch -->
+                <!-- Fetch controls row -->
                 <div class="kf-browser-fetch-row">
                     <div class="kf-form-group" style="margin-bottom:0;">
                         <label>Sport</label>
-                        <!-- Sport is locked to what was set on Create Season — not editable here -->
-                        <div class="kf-sport-locked-display">
-                            <?php echo esc_html( $sport_label ); ?>
-                        </div>
-                        <!-- Hidden input keeps the same id so kf-game-browser.js reads it unchanged -->
+                        <div class="kf-sport-locked-display"><?php echo esc_html( $sport_label ); ?></div>
                         <input type="hidden" id="kf-sport-select" value="<?php echo esc_attr( $default_sport ); ?>">
                     </div>
+
                     <div class="kf-form-group" style="margin-bottom:0;">
-                        <label for="kf-week-select">Week</label>
+                        <label for="kf-week-select">ESPN Calendar Week
+                            <span class="kf-form-note" style="font-weight:normal;font-size:0.85em;"> &mdash; auto-filled from Week # above</span>
+                        </label>
                         <select id="kf-week-select">
                             <option value="">-- Select --</option>
                             <?php for ($w = 1; $w <= 18; $w++) : ?>
@@ -300,7 +360,7 @@ function kf_week_setup_form() {
                         </select>
                     </div>
 
-                    <!-- NFL Division filter (client-side, no refetch needed) -->
+                    <!-- NFL Division filter (client-side) -->
                     <div class="kf-form-group" id="kf-division-group" style="margin-bottom:0;display:<?php echo $division_display; ?>;">
                         <label for="kf-division-filter">Division</label>
                         <select id="kf-division-filter">
@@ -320,7 +380,7 @@ function kf_week_setup_form() {
                         </select>
                     </div>
 
-                    <!-- College Conference filter (server-side, requires refetch) -->
+                    <!-- College Conference filter (server-side) -->
                     <div class="kf-form-group" id="kf-conference-group" style="margin-bottom:0;display:<?php echo $conf_display; ?>;">
                         <label for="kf-conference-filter">Conference</label>
                         <select id="kf-conference-filter">
@@ -348,7 +408,7 @@ function kf_week_setup_form() {
 
                 <div id="kf-browser-status" class="kf-browser-status" style="display:none;margin-top:0.75em;"></div>
 
-                <!-- Row 2: Sort / Spread filter + top selection counter (shown after fetch) -->
+                <!-- Sort / filter + top counter (shown after fetch) -->
                 <div id="kf-sort-filter-bar" class="kf-sort-filter-bar" style="display:none;">
                     <div class="kf-sort-filter-inner">
                         <div class="kf-sort-filter-group">
@@ -371,45 +431,27 @@ function kf_week_setup_form() {
                             </select>
                         </div>
                         <div id="kf-game-stats" class="kf-game-stats"></div>
-                        <!-- Top counter: always visible when games are shown -->
                         <div class="kf-selection-counter-top">
                             <span class="kf-selected-count-text">0 of 0 games selected</span>
                         </div>
                     </div>
                 </div>
 
-                <!-- Games list: inline styles ensure block layout regardless of theme CSS -->
                 <div id="kf-games-list" style="display:block;margin-top:0.5em;"></div>
 
-                <!-- Sticky footer: always visible at bottom while scrolling through games -->
                 <div class="kf-browser-footer">
                     <span class="kf-selected-count-text">0 of 0 games selected</span>
                     <button type="button" id="kf-add-selected-btn" class="kf-button kf-button-action" disabled>Add Selected to Week</button>
                 </div>
             </div>
-        <?php endif; ?>
+            <?php endif; ?>
 
-        <form method="POST" id="week-edit-form" class="kf-card kf-tracked-form" style="margin-top: 1.5em;">
-            <?php wp_nonce_field('kf_week_action', 'kf_week_nonce'); ?>
-            
-            <fieldset>
-                <legend>Week Details</legend>
-                <div class="kf-form-group"><label for="week_number">Week Number</label><input type="number" id="week_number" name="week_number" value="<?php echo esc_attr($week->week_number ?? ''); ?>" required></div>
-                
+            <!-- ═══════════════════════════════════════════════════════════
+                 STEP 3 — Point values (then matchups auto-fill below)
+                 ═══════════════════════════════════════════════════════════ -->
+            <fieldset class="kf-card" <?php if (!$is_matchup_editable && !$is_repair_mode) echo 'disabled'; ?>>
+                <legend>Point Values</legend>
                 <div class="kf-form-group">
-                    <label for="deadline">Submission Deadline (in your local time)</label>
-                    <input type="datetime-local" id="deadline" name="deadline" value="<?php echo esc_attr($week ? get_date_from_gmt($week->submission_deadline, 'Y-m-d\TH:i') : ''); ?>" required>
-                </div>
-            </fieldset>
-
-            <fieldset <?php if (!$is_matchup_editable && !$is_repair_mode) echo 'disabled'; ?>>
-                <legend>Game & Point Setup</legend>
-                <div class="kf-form-group">
-                    <label for="kf_matchup_count">Number of Games</label>
-                    <input type="number" id="kf_matchup_count" name="matchup_count" value="<?php echo esc_attr($matchup_count_val); ?>" <?php if ($edit_mode && !$is_repair_mode) echo 'readonly'; ?>>
-                    <?php if ($edit_mode && !$is_repair_mode): ?><p class="kf-form-note">Number of games is fixed after a week is created.</p><?php endif; ?>
-                </div>
-                 <div class="kf-form-group">
                     <label for="kf_point_values">Point Values (comma-separated)</label>
                     <textarea id="kf_point_values" name="point_values" rows="3"><?php echo esc_html($point_values_val); ?></textarea>
                     <p class="kf-form-note">Points Sum: <strong id="kf_points_sum_display">--</strong> | Required Total: <strong><?php echo esc_html($season->weekly_point_total); ?></strong></p>
