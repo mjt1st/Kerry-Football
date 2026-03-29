@@ -879,6 +879,13 @@
     content: '';
 }
 
+.kf-odds-timestamp {
+    font-size: 0.74em;
+    color: #aaa;
+    margin-top: 2px;
+    font-style: italic;
+}
+
 /* Mobile: single line */
 @media (max-width: 600px) {
     .kf-odds-line {

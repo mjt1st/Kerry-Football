@@ -180,6 +180,11 @@ function _kf_display_picks_form(
                                 ?></span>
                             <?php endif; ?>
                         </div>
+                        <?php if ( ! empty( $matchup->odds_updated_at ) ) : ?>
+                            <div class="kf-odds-timestamp">
+                                Odds via ESPN &middot; as of <?php echo esc_html( date( 'M j, Y', strtotime( $matchup->odds_updated_at ) ) ); ?>
+                            </div>
+                        <?php endif; ?>
                     <?php endif; ?>
                 </td>
                 <td>

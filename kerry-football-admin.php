@@ -275,14 +275,10 @@ function kf_ajax_fetch_games() {
         return;
     }
 
-    // Optionally fetch odds if API key is configured
-    $api_key = kf_get_odds_api_key();
-    if ($api_key) {
-        $odds = kf_odds_api_fetch_odds($sport);
-        if (!is_wp_error($odds)) {
-            $games = kf_match_espn_to_odds($games, $odds);
-        }
-    }
+    // SPORTS API V1: ESPN odds are extracted directly in kf_normalize_espn_event()
+    // from competition['odds'][0] — no separate Odds API call needed for basic lines.
+    // The Odds API integration remains available in kf-sports-api.php for future use
+    // if bookmaker-specific lines are ever needed.
 
     wp_send_json_success(['games' => $games, 'count' => count($games)]);
 }
