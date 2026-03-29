@@ -714,13 +714,7 @@
     color: #6b7280;
 }
 
-/* Game cards — using div (not label) to avoid theme label { display:inline } override */
-#kf-games-list {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin-top: 0.5em;
-}
+/* Game cards — critical layout is set inline in JS to survive theme CSS overrides */
 .kf-game-card {
     display: block;
     border: 1px solid #e5e7eb;
@@ -872,16 +866,32 @@
 .kf-browser-status.kf-status-warning { background: #fff3e0; color: #e65100; }
 .kf-browser-status.kf-status-error   { background: #fce4ec; color: #c62828; }
 
-/* Browser footer */
+/* Top selection counter (inside sort-filter-bar, right-aligned) */
+.kf-selection-counter-top {
+    margin-left: auto;
+    font-size: 0.85em;
+    font-weight: 600;
+    color: #2563eb;
+    white-space: nowrap;
+}
+
+/* Browser footer — sticky so it stays visible while scrolling through games */
 .kf-browser-footer {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-top: 1em;
-    padding-top: 0.75em;
-    border-top: 1px solid #e5e7eb;
+    margin-top: 0.5em;
+    padding: 0.6em 0.85em;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #f8fafc;
     font-size: 0.9em;
-    color: #6b7280;
+    font-weight: 600;
+    color: #374151;
+    position: sticky;
+    bottom: 8px;
+    z-index: 10;
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.08);
 }
 
 /* --- API Badge on Matchup Fieldsets --- */

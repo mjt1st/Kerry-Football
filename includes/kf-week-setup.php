@@ -343,7 +343,7 @@ function kf_week_setup_form() {
 
                 <div id="kf-browser-status" class="kf-browser-status" style="display:none;margin-top:0.75em;"></div>
 
-                <!-- Row 2: Sort / Spread filter (shown after fetch) -->
+                <!-- Row 2: Sort / Spread filter + top selection counter (shown after fetch) -->
                 <div id="kf-sort-filter-bar" class="kf-sort-filter-bar" style="display:none;">
                     <div class="kf-sort-filter-inner">
                         <div class="kf-sort-filter-group">
@@ -366,13 +366,19 @@ function kf_week_setup_form() {
                             </select>
                         </div>
                         <div id="kf-game-stats" class="kf-game-stats"></div>
+                        <!-- Top counter: always visible when games are shown -->
+                        <div class="kf-selection-counter-top">
+                            <span class="kf-selected-count-text">0 of 0 games selected</span>
+                        </div>
                     </div>
                 </div>
 
-                <div id="kf-games-list" style="margin-top:0.5em;"></div>
+                <!-- Games list: inline styles ensure block layout regardless of theme CSS -->
+                <div id="kf-games-list" style="display:block;margin-top:0.5em;"></div>
 
+                <!-- Sticky footer: always visible at bottom while scrolling through games -->
                 <div class="kf-browser-footer">
-                    <span>Selected: <strong id="kf-selected-count">0</strong> game(s)</span>
+                    <span class="kf-selected-count-text">0 of 0 games selected</span>
                     <button type="button" id="kf-add-selected-btn" class="kf-button kf-button-action" disabled>Add Selected to Week</button>
                 </div>
             </div>

@@ -170,7 +170,8 @@
 
         if (!browserPanel) return;
 
-        var fetchedGames = [];
+        var fetchedGames    = [];
+        var displayedTotal  = 0;  // count of games currently shown (after filters)
 
         // ---- Mode Toggle ----
         modeToggle.forEach(function (btn) {
@@ -317,6 +318,8 @@
             gamesList.innerHTML = '';
             updateGameStats(games);
 
+            displayedTotal = games ? games.length : 0;
+
             if (!games || games.length === 0) {
                 gamesList.innerHTML = '<p class="kf-form-note" style="padding:1em 0;">No games match the current filters.</p>';
                 updateSelectedCount();
@@ -389,45 +392,58 @@
                 statusHtml = '<span class="kf-gb-status ' + sc + '">' + escHtml(game.status_detail || game.game_status) + '</span>';
             }
 
+            // Use inline styles for layout-critical properties so WordPress theme CSS can't break them
             var card = document.createElement('div');
             card.className = 'kf-game-card';
+            card.style.cssText = 'display:block!important;border:1px solid #e5e7eb;border-radius:8px;' +
+                                  'padding:10px 14px;margin-bottom:8px;cursor:pointer;background:#fff;' +
+                                  'transition:border-color 0.15s,background 0.15s;';
+
             // Click anywhere on the card (except the checkbox itself) toggles selection
             card.addEventListener('click', function (e) {
                 if (e.target.type !== 'checkbox') {
                     var cb = card.querySelector('.kf-game-checkbox');
-                    if (cb) { cb.checked = !cb.checked; updateSelectedCount(); }
+                    if (cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change')); }
                 }
             });
 
+            // Spread badge inline colours (fallback in case CSS classes aren't loaded)
+            var badgeStyle = 'margin-left:auto;font-size:0.78em;font-weight:700;padding:3px 10px;border-radius:99px;white-space:nowrap;flex-shrink:0;';
+            if      (badgeClass === 'kf-spread-close')    badgeStyle += 'background:#dcfce7;color:#166534;';
+            else if (badgeClass === 'kf-spread-moderate') badgeStyle += 'background:#dbeafe;color:#1e40af;';
+            else if (badgeClass === 'kf-spread-big')      badgeStyle += 'background:#fef3c7;color:#92400e;';
+            else if (badgeClass === 'kf-spread-blowout')  badgeStyle += 'background:#fee2e2;color:#991b1b;';
+            else                                           badgeStyle += 'background:#f3f4f6;color:#9ca3af;';
+
             card.innerHTML =
                 // Header: checkbox · time · network · live badge · spread badge
-                '<div class="kf-game-card-header">' +
-                    '<input type="checkbox" class="kf-game-checkbox" data-game-index="' + idx + '">' +
-                    '<span class="kf-game-time">' + formatTime(game.game_datetime) + '</span>' +
-                    (game.broadcast ? '<span class="kf-game-broadcast">' + escHtml(game.broadcast) + '</span>' : '') +
+                '<div class="kf-game-card-header" style="display:flex!important;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:nowrap;">' +
+                    '<input type="checkbox" class="kf-game-checkbox" data-game-index="' + idx + '" style="flex-shrink:0;cursor:pointer;transform:scale(1.2);accent-color:#2563eb;">' +
+                    '<span class="kf-game-time" style="font-size:0.82em;color:#6b7280;white-space:nowrap;flex-shrink:0;">' + formatTime(game.game_datetime) + '</span>' +
+                    (game.broadcast ? '<span class="kf-game-broadcast" style="font-size:0.76em;color:#9ca3af;font-style:italic;white-space:nowrap;">' + escHtml(game.broadcast) + '</span>' : '') +
                     statusHtml +
-                    '<span class="kf-spread-badge ' + badgeClass + '">' + escHtml(spreadLabel) + '</span>' +
+                    '<span class="kf-spread-badge ' + badgeClass + '" style="' + badgeStyle + '">' + escHtml(spreadLabel) + '</span>' +
                 '</div>' +
-                // Teams: ABBR FullName @ ABBR FullName [score]
-                '<div class="kf-game-card-teams">' +
-                    '<span class="kf-team-away">' +
-                        '<span class="kf-team-abbr">' + escHtml(game.away_abbr || '') + '</span> ' +
-                        '<span class="kf-team-name">' + escHtml(game.away_short || game.away_team) + '</span>' +
+                // Teams: ABBR Name  @  ABBR Name
+                '<div class="kf-game-card-teams" style="display:flex!important;align-items:center;gap:6px;font-size:0.95em;overflow:hidden;">' +
+                    '<span style="display:flex;align-items:baseline;gap:4px;flex:1;min-width:0;">' +
+                        '<strong style="font-weight:700;color:#111;white-space:nowrap;">' + escHtml(game.away_abbr || '') + '</strong>' +
+                        '<span style="color:#374151;font-size:0.88em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escHtml(game.away_short || game.away_team) + '</span>' +
                     '</span>' +
-                    '<span class="kf-game-at">@</span>' +
-                    '<span class="kf-team-home">' +
-                        '<span class="kf-team-abbr">' + escHtml(game.home_abbr || '') + '</span> ' +
-                        '<span class="kf-team-name">' + escHtml(game.home_short || game.home_team) + '</span>' +
+                    '<span style="color:#9ca3af;font-weight:700;font-size:0.8em;flex-shrink:0;">@</span>' +
+                    '<span style="display:flex;align-items:baseline;gap:4px;flex:1;min-width:0;">' +
+                        '<strong style="font-weight:700;color:#111;white-space:nowrap;">' + escHtml(game.home_abbr || '') + '</strong>' +
+                        '<span style="color:#374151;font-size:0.88em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escHtml(game.home_short || game.home_team) + '</span>' +
                     '</span>' +
                     ((game.game_status === 'final' || game.game_status === 'in_progress')
-                        ? '<span class="kf-game-score">' + (game.away_score || 0) + '\u2013' + (game.home_score || 0) + '</span>'
+                        ? '<span style="font-weight:700;color:#1d4ed8;font-size:0.88em;white-space:nowrap;flex-shrink:0;">' + (game.away_score || 0) + '\u2013' + (game.home_score || 0) + '</span>'
                         : '') +
                 '</div>' +
                 // Odds row (O/U + ML)
                 ((game.over_under || mlLabel)
-                    ? '<div class="kf-game-card-odds">' +
-                          (game.over_under ? '<span>O/U <strong>' + game.over_under + '</strong></span>' : '') +
-                          (mlLabel ? '<span class="kf-ml-label">ML: ' + escHtml(mlLabel) + '</span>' : '') +
+                    ? '<div class="kf-game-card-odds" style="display:flex!important;flex-wrap:wrap;gap:1em;margin-top:6px;font-size:0.78em;color:#6b7280;border-top:1px solid #f3f4f6;padding-top:5px;">' +
+                          (game.over_under ? '<span>O/U <strong style="color:#374151;">' + game.over_under + '</strong></span>' : '') +
+                          (mlLabel ? '<span style="color:#9ca3af;">ML: ' + escHtml(mlLabel) + '</span>' : '') +
                       '</div>'
                     : '');
 
@@ -517,9 +533,13 @@
 
         // ---- Helpers ----
         function updateSelectedCount() {
-            var n = gamesList.querySelectorAll('.kf-game-checkbox:checked').length;
-            if (selectedCount) selectedCount.textContent = n;
-            if (addBtn)        addBtn.disabled = n === 0;
+            var n    = gamesList.querySelectorAll('.kf-game-checkbox:checked').length;
+            var text = n + ' of ' + displayedTotal + ' games selected';
+            // Update all counter elements (top bar + bottom footer)
+            document.querySelectorAll('.kf-selected-count-text').forEach(function (el) {
+                el.textContent = text;
+            });
+            if (addBtn) addBtn.disabled = n === 0;
         }
 
         function showStatus(msg, type) {
