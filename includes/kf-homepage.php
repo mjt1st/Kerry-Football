@@ -62,24 +62,16 @@ function kf_homepage_shortcode() {
                 ?>
                 </div>
 
-                <h2 style="margin-top: 2em;">Past Seasons</h2>
-                <div class="kf-season-cards-container">
                 <?php
-                $past_seasons_found = false;
-                if ( $seasons ) {
-                    foreach ( $seasons as $season ) {
-                        if ( ! $season->is_active ) {
-                            $card_data = kf_get_card_data_for_season( $season->id, $current_user->ID, $is_commissioner );
-                            echo kf_render_season_card( $season, $is_commissioner, $card_data );
-                            $past_seasons_found = true;
-                        }
-                    }
-                }
-                if ( ! $past_seasons_found ) {
-                    echo '<p>You have no past seasons to display.</p>';
-                }
-                ?>
+                $past_seasons_list = $seasons ? array_filter( (array) $seasons, fn($s) => ! $s->is_active ) : [];
+                if ( ! empty( $past_seasons_list ) ) : ?>
+                <h2 style="margin-top: 2em;">Past Seasons</h2>
+                <div class="kf-archived-seasons-list">
+                <?php foreach ( $past_seasons_list as $season ) :
+                    echo kf_render_archived_season_row( $season, $current_user->ID );
+                endforeach; ?>
                 </div>
+                <?php endif; ?>
             </div>
         </div>
         <?php
@@ -185,6 +177,61 @@ function kf_format_deadline_et( $utc_datetime ) {
     } catch ( Exception $e ) {
         return 'N/A';
     }
+}
+
+/**
+ * Render a compact single-row card for an archived (past) season.
+ * Only fetches final rank + total score — no weekly data needed.
+ */
+function kf_render_archived_season_row( $season, $user_id ) {
+    global $wpdb;
+
+    // Final rank & total score for this player
+    $scores = $wpdb->get_results( $wpdb->prepare(
+        "SELECT user_id, SUM(score) AS total_score
+         FROM {$wpdb->prefix}scores
+         WHERE week_id IN (SELECT id FROM {$wpdb->prefix}weeks WHERE season_id = %d)
+         GROUP BY user_id ORDER BY total_score DESC",
+        $season->id
+    ) );
+
+    $rank        = null;
+    $total_score = null;
+    $player_ct   = count( $scores );
+    foreach ( $scores as $i => $row ) {
+        if ( (int) $row->user_id === (int) $user_id ) {
+            $rank        = $i + 1;
+            $total_score = (int) $row->total_score;
+            break;
+        }
+    }
+
+    $suffix = function( $n ) {
+        if ( ! is_numeric( $n ) ) return $n;
+        $ends = ['th','st','nd','rd','th','th','th','th','th','th'];
+        return ( ( $n % 100 ) >= 11 && ( $n % 100 ) <= 13 ) ? $n . 'th' : $n . $ends[ $n % 10 ];
+    };
+
+    ob_start(); ?>
+    <div class="kf-archived-row">
+        <div class="kf-archived-row-info">
+            <span class="kf-archived-name"><?php echo esc_html( $season->name ); ?></span>
+            <?php if ( $rank !== null ) : ?>
+                <span class="kf-archived-rank">
+                    Final Rank: <strong><?php echo $suffix( $rank ); ?></strong> of <?php echo $player_ct; ?>
+                    &nbsp;&middot;&nbsp; <?php echo $total_score; ?> pts
+                </span>
+            <?php endif; ?>
+        </div>
+        <a href="#"
+           class="kf-button kf-button-secondary kf-season-select-and-go"
+           data-season-id="<?php echo esc_attr( $season->id ); ?>"
+           data-redirect-url="<?php echo esc_url( site_url( '/season-summary/' ) ); ?>">
+            View Season
+        </a>
+    </div>
+    <?php
+    return ob_get_clean();
 }
 
 /**
