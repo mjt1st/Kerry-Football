@@ -108,15 +108,14 @@ function kf_create_season_shortcode() {
         }
     }
 
-    <?php
     // Repopulate form values from POST on error, or use defaults for first load.
-    $v_name        = isset( $_POST['kf_season_submit'] ) ? esc_attr( $_POST['season_name'] ?? '' )            : '';
+    $v_name        = isset( $_POST['kf_season_submit'] ) ? esc_attr( $_POST['season_name'] ?? '' )             : '';
     $v_sport       = isset( $_POST['kf_season_submit'] ) ? sanitize_text_field( $_POST['sport_type'] ?? 'nfl' ) : 'nfl';
-    $v_num_weeks   = isset( $_POST['kf_season_submit'] ) ? intval( $_POST['num_weeks'] ?? '' )                 : '';
-    $v_wpt         = isset( $_POST['kf_season_submit'] ) ? intval( $_POST['weekly_point_total'] ?? '' )        : '';
-    $v_matchups    = isset( $_POST['kf_season_submit'] ) ? intval( $_POST['default_matchup_count'] ?? '' )     : '';
-    $v_points      = isset( $_POST['kf_season_submit'] ) ? esc_attr( $_POST['default_point_values'] ?? '' )   : '';
-    $v_mwow        = isset( $_POST['kf_season_submit'] ) ? intval( $_POST['mwow_bonus'] ?? '' )                : '';
+    $v_num_weeks   = isset( $_POST['kf_season_submit'] ) ? intval( $_POST['num_weeks'] ?? 0 )                  : '';
+    $v_wpt         = isset( $_POST['kf_season_submit'] ) ? intval( $_POST['weekly_point_total'] ?? 0 )         : '';
+    $v_matchups    = isset( $_POST['kf_season_submit'] ) ? intval( $_POST['default_matchup_count'] ?? 0 )      : '';
+    $v_points      = isset( $_POST['kf_season_submit'] ) ? esc_attr( $_POST['default_point_values'] ?? '' )    : '';
+    $v_mwow        = isset( $_POST['kf_season_submit'] ) ? intval( $_POST['mwow_bonus'] ?? 0 )                 : '';
     $v_dd_max      = isset( $_POST['kf_season_submit'] ) ? intval( $_POST['dd_max'] ?? 4 )                     : 4;
     $v_dd_week     = isset( $_POST['kf_season_submit'] ) ? intval( $_POST['dd_start_week'] ?? 9 )              : 9;
     ?>
