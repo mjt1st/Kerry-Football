@@ -108,29 +108,40 @@ function kf_create_season_shortcode() {
         }
     }
 
+    <?php
+    // Repopulate form values from POST on error, or use defaults for first load.
+    $v_name        = isset( $_POST['kf_season_submit'] ) ? esc_attr( $_POST['season_name'] ?? '' )            : '';
+    $v_sport       = isset( $_POST['kf_season_submit'] ) ? sanitize_text_field( $_POST['sport_type'] ?? 'nfl' ) : 'nfl';
+    $v_num_weeks   = isset( $_POST['kf_season_submit'] ) ? intval( $_POST['num_weeks'] ?? '' )                 : '';
+    $v_wpt         = isset( $_POST['kf_season_submit'] ) ? intval( $_POST['weekly_point_total'] ?? '' )        : '';
+    $v_matchups    = isset( $_POST['kf_season_submit'] ) ? intval( $_POST['default_matchup_count'] ?? '' )     : '';
+    $v_points      = isset( $_POST['kf_season_submit'] ) ? esc_attr( $_POST['default_point_values'] ?? '' )   : '';
+    $v_mwow        = isset( $_POST['kf_season_submit'] ) ? intval( $_POST['mwow_bonus'] ?? '' )                : '';
+    $v_dd_max      = isset( $_POST['kf_season_submit'] ) ? intval( $_POST['dd_max'] ?? 4 )                     : 4;
+    $v_dd_week     = isset( $_POST['kf_season_submit'] ) ? intval( $_POST['dd_start_week'] ?? 9 )              : 9;
     ?>
     <div class="kf-container">
         <h2>Season Setup</h2>
         <?php // This class enables the universal "unsaved changes" warning JavaScript handler. ?>
         <form method="POST" class="kf-tracked-form">
             <?php wp_nonce_field('kf_create_season'); ?>
-            <p><label>Season Name<br><input type="text" name="season_name" required></label></p>
+            <p><label>Season Name<br><input type="text" name="season_name" value="<?php echo $v_name; ?>" required></label></p>
             <p>
                 <label>Sport Type<br>
                     <select name="sport_type">
-                        <option value="nfl">NFL (Pro Football)</option>
-                        <option value="college-football">College Football (NCAAF)</option>
+                        <option value="nfl" <?php selected( $v_sport, 'nfl' ); ?>>NFL (Pro Football)</option>
+                        <option value="college-football" <?php selected( $v_sport, 'college-football' ); ?>>College Football (NCAAF)</option>
                     </select>
                 </label>
                 <span style="display:block;font-size:0.85em;color:#777;margin-top:4px;">Sets the default sport when browsing live games for this season's weeks.</span>
             </p>
-            <p><label>Number of Weeks<br><input type="number" name="num_weeks" required></label></p>
-            <p><label>Weekly Point Total<br><input type="number" name="weekly_point_total" required></label></p>
-            <p><label>Default Matchup Count<br><input type="number" name="default_matchup_count" required></label></p>
-            <p><label>Default Point Values (comma-separated)<br><input type="text" name="default_point_values" required placeholder="1,2,3,...15"></label></p>
-            <p><label>MWOW Bonus Points<br><input type="number" name="mwow_bonus" required></label></p>
-            <p><label>Max Double Down Uses<br><input type="number" name="dd_max" value="4"></label></p>
-            <p><label>DD Starts in Week<br><input type="number" name="dd_start_week" value="9"></label></p>
+            <p><label>Number of Weeks<br><input type="number" name="num_weeks" value="<?php echo $v_num_weeks ?: ''; ?>" required></label></p>
+            <p><label>Weekly Point Total<br><input type="number" name="weekly_point_total" value="<?php echo $v_wpt ?: ''; ?>" required></label></p>
+            <p><label>Default Matchup Count<br><input type="number" name="default_matchup_count" value="<?php echo $v_matchups ?: ''; ?>" required></label></p>
+            <p><label>Default Point Values (comma-separated)<br><input type="text" name="default_point_values" value="<?php echo $v_points; ?>" required placeholder="1,2,3,...15"></label></p>
+            <p><label>MWOW Bonus Points<br><input type="number" name="mwow_bonus" value="<?php echo $v_mwow ?: ''; ?>" required></label></p>
+            <p><label>Max Double Down Uses<br><input type="number" name="dd_max" value="<?php echo $v_dd_max; ?>"></label></p>
+            <p><label>DD Starts in Week<br><input type="number" name="dd_start_week" value="<?php echo $v_dd_week; ?>"></label></p>
             <p><button type="submit" name="kf_season_submit" class="kf-button">Create Season</button></p>
         </form>
     </div>
