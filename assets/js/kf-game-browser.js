@@ -389,8 +389,15 @@
                 statusHtml = '<span class="kf-gb-status ' + sc + '">' + escHtml(game.status_detail || game.game_status) + '</span>';
             }
 
-            var card = document.createElement('label');
+            var card = document.createElement('div');
             card.className = 'kf-game-card';
+            // Click anywhere on the card (except the checkbox itself) toggles selection
+            card.addEventListener('click', function (e) {
+                if (e.target.type !== 'checkbox') {
+                    var cb = card.querySelector('.kf-game-checkbox');
+                    if (cb) { cb.checked = !cb.checked; updateSelectedCount(); }
+                }
+            });
 
             card.innerHTML =
                 // Header: checkbox · time · network · live badge · spread badge
@@ -424,7 +431,13 @@
                       '</div>'
                     : '');
 
-            card.querySelector('.kf-game-checkbox').addEventListener('change', updateSelectedCount);
+            var cb = card.querySelector('.kf-game-checkbox');
+            if (cb) {
+                cb.addEventListener('change', function () {
+                    card.classList.toggle('kf-card-selected', cb.checked);
+                    updateSelectedCount();
+                });
+            }
             return card;
         }
 

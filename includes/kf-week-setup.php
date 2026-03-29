@@ -319,8 +319,8 @@ function kf_week_setup_form() {
                     <div class="kf-form-group" id="kf-conference-group" style="margin-bottom:0;display:<?php echo $conf_display; ?>;">
                         <label for="kf-conference-filter">Conference</label>
                         <select id="kf-conference-filter">
-                            <option value="">All Conferences</option>
-                            <optgroup label="Power">
+                            <option value="fbs">FBS Only (all D-I)</option>
+                            <optgroup label="Power 4">
                                 <option value="sec">SEC</option>
                                 <option value="big-ten">Big Ten</option>
                                 <option value="big-12">Big 12</option>
@@ -334,6 +334,7 @@ function kf_week_setup_form() {
                                 <option value="cusa">Conf USA</option>
                             </optgroup>
                             <option value="ind">Independents</option>
+                            <option value="">All (incl. FCS)</option>
                         </select>
                     </div>
 

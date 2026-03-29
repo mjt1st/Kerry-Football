@@ -245,6 +245,7 @@ function kf_ajax_fetch_games() {
     if ($sport === 'college-football' && !empty($_POST['conference'])) {
         // ESPN uses group IDs for conferences
         $conf_map = [
+            'fbs'            => 80, // All FBS (D-I) — most useful default for pick'em leagues
             'sec'            => 8,
             'big-ten'        => 5,
             'big-12'         => 4,

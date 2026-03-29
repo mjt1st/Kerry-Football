@@ -714,61 +714,72 @@
     color: #6b7280;
 }
 
-/* Game cards */
+/* Game cards — using div (not label) to avoid theme label { display:inline } override */
+#kf-games-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 0.5em;
+}
 .kf-game-card {
     display: block;
     border: 1px solid #e5e7eb;
     border-radius: 8px;
-    padding: 0.6em 0.85em;
-    margin-bottom: 6px;
+    padding: 0.65em 0.9em;
     cursor: pointer;
     transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
     background: #fff;
+    user-select: none;
+    -webkit-user-select: none;
 }
-.kf-game-card:hover { background: #f0f7ff; border-color: #93c5fd; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
-.kf-game-card:has(.kf-game-checkbox:checked) { background: #eff6ff; border-color: #3b82f6; }
+.kf-game-card:hover { background: #f0f7ff; border-color: #93c5fd; box-shadow: 0 2px 6px rgba(0,0,0,0.07); }
+.kf-game-card.kf-card-selected { background: #eff6ff; border-color: #3b82f6; border-width: 2px; }
 
 /* Card header row: checkbox · time · network · badge */
 .kf-game-card-header {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 5px;
+    margin-bottom: 6px;
+    flex-wrap: nowrap;
 }
 .kf-game-checkbox {
-    transform: scale(1.25);
+    transform: scale(1.3);
     flex-shrink: 0;
     cursor: pointer;
     accent-color: #2563eb;
+    margin-right: 2px;
 }
 .kf-game-time {
-    font-size: 0.85em;
+    font-size: 0.82em;
     color: #6b7280;
-    min-width: 72px;
+    white-space: nowrap;
     flex-shrink: 0;
 }
 .kf-game-broadcast {
-    font-size: 0.78em;
+    font-size: 0.76em;
     color: #9ca3af;
     font-style: italic;
+    white-space: nowrap;
 }
 
 /* Live / Final status tag */
 .kf-gb-status {
     font-size: 0.72em;
     font-weight: 700;
-    padding: 1px 7px;
+    padding: 2px 8px;
     border-radius: 99px;
+    white-space: nowrap;
 }
 .kf-gb-status-live  { background: #fee2e2; color: #b91c1c; }
 .kf-gb-status-final { background: #dcfce7; color: #166534; }
 
-/* Spread badge — pushed to the right with margin-left:auto */
+/* Spread badge — pushed to the right */
 .kf-spread-badge {
     margin-left: auto;
     font-size: 0.78em;
     font-weight: 700;
-    padding: 2px 9px;
+    padding: 3px 10px;
     border-radius: 99px;
     white-space: nowrap;
     flex-shrink: 0;
@@ -784,34 +795,45 @@
 .kf-game-card-teams {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     font-size: 0.95em;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow: hidden;
 }
 .kf-team-away, .kf-team-home {
     display: flex;
     align-items: baseline;
-    gap: 4px;
+    gap: 5px;
+    min-width: 0;
+    flex: 1;
 }
+.kf-team-home { justify-content: flex-end; }
 .kf-team-abbr {
     font-weight: 700;
     color: #111827;
-    font-size: 1em;
+    font-size: 0.95em;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 .kf-team-name {
     color: #374151;
-    font-size: 0.9em;
+    font-size: 0.88em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .kf-game-at {
     color: #9ca3af;
-    font-size: 0.85em;
-    font-weight: 600;
+    font-size: 0.8em;
+    font-weight: 700;
+    flex-shrink: 0;
 }
 .kf-game-score {
-    margin-left: auto;
     font-weight: 700;
     color: #1d4ed8;
-    font-size: 0.9em;
+    font-size: 0.88em;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 /* Odds sub-row */
@@ -819,14 +841,25 @@
     display: flex;
     flex-wrap: wrap;
     gap: 1em;
-    margin-top: 5px;
-    font-size: 0.8em;
+    margin-top: 6px;
+    font-size: 0.78em;
     color: #6b7280;
-    border-top: 1px dashed #f3f4f6;
-    padding-top: 4px;
+    border-top: 1px solid #f3f4f6;
+    padding-top: 5px;
 }
 .kf-game-card-odds strong { color: #374151; }
 .kf-ml-label { color: #9ca3af; }
+
+/* Mobile: stack cards more cleanly */
+@media (max-width: 600px) {
+    .kf-game-card { padding: 0.6em 0.7em; }
+    .kf-game-card-header { gap: 6px; }
+    .kf-game-broadcast { display: none; } /* hide TV network on very small screens */
+    .kf-game-card-teams { gap: 6px; font-size: 0.9em; }
+    .kf-team-name { font-size: 0.82em; }
+    .kf-game-card-odds { font-size: 0.74em; gap: 0.6em; }
+    .kf-ml-label { display: none; } /* hide ML on mobile — spread + O/U is enough */
+}
 
 /* Browser status message */
 .kf-browser-status {
