@@ -210,8 +210,13 @@ function kf_send_player_invite($user_id, $season_id) {
     $season = $wpdb->get_row($wpdb->prepare("SELECT name FROM {$wpdb->prefix}seasons WHERE id = %d", $season_id));
     if (!$season) return false;
 
-    $subject = "Invitation to Join Season: " . $season->name;
-    $message = "<p>Hi {$user->display_name},</p><p>You've been invited to join the '{$season->name}' season. Please log in and accept the invitation.</p>";
+    $dashboard_url = site_url( '/player-dashboard/' );
+    $subject = "You're invited to join: " . $season->name;
+    $message  = "<p>Hi {$user->display_name},</p>";
+    $message .= "<p>You've been invited to join the <strong>{$season->name}</strong> season of " . get_bloginfo('name') . ".</p>";
+    $message .= "<p><a href=\"{$dashboard_url}\" style=\"display:inline-block;padding:10px 20px;background:#2563eb;color:#fff;text-decoration:none;border-radius:5px;\">Accept or Decline Invitation</a></p>";
+    $message .= "<p>Or copy this link: {$dashboard_url}</p>";
+    $message .= "<p>You'll see the invitation at the top of your dashboard once you log in.</p>";
     $headers = ['Content-Type: text/html; charset=UTF-8', "From: " . get_bloginfo('name') . " <" . get_option('admin_email') . ">"];
 
     return wp_mail($user->user_email, $subject, $message, $headers);

@@ -46,11 +46,15 @@ function kf_player_management_shortcode() {
             [ '%d', '%d', '%s' ]
         );
         $max_order = $wpdb->get_var($wpdb->prepare("SELECT MAX(display_order) FROM $player_order_table WHERE season_id = %d", $season_id));
-        $wpdb->insert($player_order_table, 
+        $wpdb->insert($player_order_table,
             ['season_id' => $season_id, 'user_id' => $user_to_add, 'display_order' => $max_order + 1],
             ['%d', '%d', '%d']
         );
-        echo '<div class="notice notice-success is-dismissible"><p>Player added as "invited".</p></div>';
+        // Send invitation email
+        if ( function_exists( 'kf_send_player_invite' ) ) {
+            kf_send_player_invite( $user_to_add, $season_id );
+        }
+        echo '<div class="notice notice-success is-dismissible"><p>Player invited. An invitation email has been sent.</p></div>';
     }
     if ( isset( $_POST['kf_update_player_status'] ) && check_admin_referer( 'kf_update_status_nonce' ) ) {
         $player_entry_id = intval( $_POST['player_entry_id'] );
@@ -102,17 +106,22 @@ function kf_player_management_shortcode() {
         }
     }
     
-    // --- Fetch Data for Display, now using the custom order ---
-    $season_players_results = $wpdb->get_results( $wpdb->prepare( 
-        "SELECT sp.id, sp.user_id, sp.status, u.display_name 
-         FROM $season_players_table sp 
-         JOIN $users_table u ON sp.user_id = u.ID 
+    // --- Fetch Data for Display, grouped by status ---
+    $season_players_results = $wpdb->get_results( $wpdb->prepare(
+        "SELECT sp.id, sp.user_id, sp.status, u.display_name
+         FROM $season_players_table sp
+         JOIN $users_table u ON sp.user_id = u.ID
          LEFT JOIN $player_order_table spo ON sp.user_id = spo.user_id AND sp.season_id = spo.season_id
-         WHERE sp.season_id = %d 
-         ORDER BY spo.display_order ASC, u.display_name ASC", 
-         $season_id 
-    ));
+         WHERE sp.season_id = %d
+         ORDER BY spo.display_order ASC, u.display_name ASC",
+         $season_id
+    ) );
     $players_in_season_ids = wp_list_pluck( $season_players_results, 'user_id' );
+
+    // Split into status groups
+    $players_accepted = array_filter( $season_players_results, fn($p) => $p->status === 'accepted' );
+    $players_invited  = array_filter( $season_players_results, fn($p) => $p->status === 'invited' );
+    $players_declined = array_filter( $season_players_results, fn($p) => $p->status === 'declined' );
     $users_to_add = get_users( [ 'exclude' => $players_in_season_ids, 'orderby' => 'login', 'order' => 'ASC' ] );
 
     ob_start();
@@ -124,30 +133,32 @@ function kf_player_management_shortcode() {
 
         <div class="kf-manage-players-grid">
             <div class="kf-card">
-                <h3 class="kf-card-title">Players in Season</h3>
-                <p class="kf-card-subtitle">Drag and drop players to change their column order on summary pages.</p>
-                
+
+                <?php // --- ACCEPTED PLAYERS --- ?>
+                <h3 class="kf-card-title">&#10003; Accepted
+                    <span class="kf-player-count"><?php echo count( $players_accepted ); ?></span>
+                </h3>
+                <p class="kf-card-subtitle">Drag and drop to set column order on summary pages.</p>
                 <div id="kf-sortable-players" class="kf-sortable-list">
-                    <?php if ( empty( $season_players_results ) ) : ?>
-                        <p>No players have been added to this season yet.</p>
+                    <?php if ( empty( $players_accepted ) ) : ?>
+                        <p style="color:#777;font-style:italic;padding:8px 0;">No accepted players yet.</p>
                     <?php else : ?>
-                        <?php foreach ( $season_players_results as $player ) : ?>
+                        <?php foreach ( $players_accepted as $player ) : ?>
                             <div class="kf-player-sort-item" draggable="true" data-user-id="<?php echo esc_attr( $player->user_id ); ?>">
                                 <span class="kf-drag-handle">☰</span>
                                 <span class="kf-player-name"><?php echo esc_html( $player->display_name ); ?></span>
-                                <span class="kf-player-status"><?php echo esc_html( ucfirst( $player->status ) ); ?></span>
                                 <div class="kf-player-actions">
-                                    <form method="POST" style="display: inline-block;">
+                                    <form method="POST" style="display:inline-block;">
                                         <?php wp_nonce_field( 'kf_update_status_nonce' ); ?>
                                         <input type="hidden" name="player_entry_id" value="<?php echo esc_attr( $player->id ); ?>">
                                         <select name="new_status">
-                                            <option value="invited" <?php selected( $player->status, 'invited' ); ?>>Invited</option>
-                                            <option value="accepted" <?php selected( $player->status, 'accepted' ); ?>>Accepted</option>
-                                            <option value="declined" <?php selected( $player->status, 'declined' ); ?>>Declined</option>
+                                            <option value="accepted" selected>Accepted</option>
+                                            <option value="invited">Invited</option>
+                                            <option value="declined">Declined</option>
                                         </select>
                                         <button type="submit" name="kf_update_player_status" class="button button-primary">Update</button>
                                     </form>
-                                    <form method="POST" style="display: inline-block;" onsubmit="return confirm('Are you sure you want to remove this player?');">
+                                    <form method="POST" style="display:inline-block;" onsubmit="return confirm('Remove this player?');">
                                         <?php wp_nonce_field( 'kf_remove_player_nonce' ); ?>
                                         <input type="hidden" name="player_entry_id" value="<?php echo esc_attr( $player->id ); ?>">
                                         <button type="submit" name="kf_remove_player" class="button button-link-delete">Remove</button>
@@ -161,6 +172,68 @@ function kf_player_management_shortcode() {
                     <button id="kf-save-player-order" class="button kf-button-action" style="display:none;">Save Player Order</button>
                     <span id="kf-order-status" class="kf-order-status-spinner" style="display:none;">Saving...</span>
                 </div>
+
+                <?php // --- PENDING (INVITED) PLAYERS --- ?>
+                <h3 class="kf-card-title" style="margin-top:2em;">&#9200; Pending
+                    <span class="kf-player-count"><?php echo count( $players_invited ); ?></span>
+                </h3>
+                <p class="kf-card-subtitle">Invited but not yet accepted. Player will see an Accept/Decline prompt on their dashboard.</p>
+                <?php if ( empty( $players_invited ) ) : ?>
+                    <p style="color:#777;font-style:italic;padding:8px 0;">No pending invitations.</p>
+                <?php else : ?>
+                    <?php foreach ( $players_invited as $player ) : ?>
+                        <div class="kf-player-sort-item" style="opacity:0.8;">
+                            <span class="kf-player-name"><?php echo esc_html( $player->display_name ); ?></span>
+                            <div class="kf-player-actions">
+                                <form method="POST" style="display:inline-block;">
+                                    <?php wp_nonce_field( 'kf_update_status_nonce' ); ?>
+                                    <input type="hidden" name="player_entry_id" value="<?php echo esc_attr( $player->id ); ?>">
+                                    <select name="new_status">
+                                        <option value="invited" selected>Invited</option>
+                                        <option value="accepted">Accepted</option>
+                                        <option value="declined">Declined</option>
+                                    </select>
+                                    <button type="submit" name="kf_update_player_status" class="button button-primary">Update</button>
+                                </form>
+                                <form method="POST" style="display:inline-block;" onsubmit="return confirm('Remove this player?');">
+                                    <?php wp_nonce_field( 'kf_remove_player_nonce' ); ?>
+                                    <input type="hidden" name="player_entry_id" value="<?php echo esc_attr( $player->id ); ?>">
+                                    <button type="submit" name="kf_remove_player" class="button button-link-delete">Remove</button>
+                                </form>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+
+                <?php // --- DECLINED PLAYERS --- ?>
+                <?php if ( ! empty( $players_declined ) ) : ?>
+                    <h3 class="kf-card-title" style="margin-top:2em;">&#10007; Declined
+                        <span class="kf-player-count"><?php echo count( $players_declined ); ?></span>
+                    </h3>
+                    <?php foreach ( $players_declined as $player ) : ?>
+                        <div class="kf-player-sort-item" style="opacity:0.6;">
+                            <span class="kf-player-name" style="text-decoration:line-through;"><?php echo esc_html( $player->display_name ); ?></span>
+                            <div class="kf-player-actions">
+                                <form method="POST" style="display:inline-block;">
+                                    <?php wp_nonce_field( 'kf_update_status_nonce' ); ?>
+                                    <input type="hidden" name="player_entry_id" value="<?php echo esc_attr( $player->id ); ?>">
+                                    <select name="new_status">
+                                        <option value="declined" selected>Declined</option>
+                                        <option value="invited">Re-Invite</option>
+                                        <option value="accepted">Accepted</option>
+                                    </select>
+                                    <button type="submit" name="kf_update_player_status" class="button button-primary">Update</button>
+                                </form>
+                                <form method="POST" style="display:inline-block;" onsubmit="return confirm('Remove this player?');">
+                                    <?php wp_nonce_field( 'kf_remove_player_nonce' ); ?>
+                                    <input type="hidden" name="player_entry_id" value="<?php echo esc_attr( $player->id ); ?>">
+                                    <button type="submit" name="kf_remove_player" class="button button-link-delete">Remove</button>
+                                </form>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+
             </div>
 
             <div class="kf-card">

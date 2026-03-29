@@ -27,6 +27,35 @@ function kf_player_dashboard_view() {
     $user_id = get_current_user_id();
     $season_id = $_SESSION['kf_active_season_id'] ?? 0;
 
+    // --- Handle invitation response (Accept / Decline) ---
+    if ( isset( $_POST['kf_invite_response'] ) && isset( $_POST['kf_invite_nonce'] ) &&
+         wp_verify_nonce( $_POST['kf_invite_nonce'], 'kf_invite_response_action' ) ) {
+        $invite_season_id = intval( $_POST['invite_season_id'] ?? 0 );
+        $response         = sanitize_key( $_POST['kf_invite_response'] );
+        if ( $invite_season_id > 0 && in_array( $response, [ 'accepted', 'declined' ], true ) ) {
+            $wpdb->update(
+                $wpdb->prefix . 'season_players',
+                [ 'status' => $response ],
+                [ 'user_id' => $user_id, 'season_id' => $invite_season_id, 'status' => 'invited' ]
+            );
+            // If accepted, make this the active season
+            if ( $response === 'accepted' ) {
+                $_SESSION['kf_active_season_id'] = $invite_season_id;
+                $season_id = $invite_season_id;
+                delete_transient( 'kf_default_season_' . $user_id );
+            }
+        }
+    }
+
+    // --- Fetch any pending invitations for this player ---
+    $pending_invitations = $wpdb->get_results( $wpdb->prepare(
+        "SELECT s.id, s.name FROM {$wpdb->prefix}seasons s
+         JOIN {$wpdb->prefix}season_players sp ON s.id = sp.season_id
+         WHERE sp.user_id = %d AND sp.status = 'invited'
+         ORDER BY s.id DESC",
+        $user_id
+    ) );
+
     if (!$season_id) {
         return '<div class="kf-container"><h1>Player Dashboard</h1><p>Please select a season from the main menu to view your dashboard.</p></div>';
     }
@@ -109,6 +138,25 @@ function kf_player_dashboard_view() {
     ob_start();
     ?>
     <div class="kf-container">
+
+        <?php // --- Pending Invitation Banners --- ?>
+        <?php foreach ( $pending_invitations as $invite ) : ?>
+            <div class="kf-invite-banner">
+                <div class="kf-invite-banner-text">
+                    <strong>&#127944; You've been invited to join <em><?php echo esc_html( $invite->name ); ?></em>!</strong>
+                    <span>Do you want to participate in this season?</span>
+                </div>
+                <div class="kf-invite-banner-actions">
+                    <form method="POST" style="display:inline;">
+                        <?php wp_nonce_field( 'kf_invite_response_action', 'kf_invite_nonce' ); ?>
+                        <input type="hidden" name="invite_season_id" value="<?php echo esc_attr( $invite->id ); ?>">
+                        <button type="submit" name="kf_invite_response" value="accepted" class="kf-button kf-button-action">&#10003; Accept</button>
+                        <button type="submit" name="kf_invite_response" value="declined" class="kf-button kf-button-secondary" style="margin-left:6px;">&#10007; Decline</button>
+                    </form>
+                </div>
+            </div>
+        <?php endforeach; ?>
+
         <div class="kf-dashboard-header">
             <h1><?php echo esc_html($player_info->display_name); ?>'s Dashboard</h1>
             <?php if ($is_active_player): ?>

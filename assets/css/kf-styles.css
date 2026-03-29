@@ -820,3 +820,47 @@
     height: 20px;
     overflow: hidden;
 }
+/* --- Player Invite Banner --- */
+.kf-invite-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    background: #fffbeb;
+    border: 2px solid #f59e0b;
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-bottom: 1.5em;
+}
+.kf-invite-banner-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.kf-invite-banner-text strong {
+    font-size: 1.05em;
+    color: #92400e;
+}
+.kf-invite-banner-text span {
+    font-size: 0.9em;
+    color: #78350f;
+}
+.kf-invite-banner-actions {
+    white-space: nowrap;
+}
+
+/* --- Player Management Status Groups --- */
+.kf-player-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #e5e7eb;
+    color: #374151;
+    font-size: 0.8em;
+    font-weight: 700;
+    border-radius: 12px;
+    padding: 1px 9px;
+    margin-left: 8px;
+    vertical-align: middle;
+}
