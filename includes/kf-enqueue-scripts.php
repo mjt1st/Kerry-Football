@@ -31,11 +31,12 @@ function kf_enqueue_assets() {
         $plugin_base_url = plugin_dir_url( dirname( __FILE__ ) );
 
         // Enqueue the main plugin stylesheet.
+        // Using filemtime() as the version so browsers/caches auto-bust on every file change.
         wp_enqueue_style(
             'kerry-football-styles',
             $plugin_base_url . 'assets/css/kf-styles.css',
             [],
-            '1.0.5' // Incremented version number
+            filemtime( KF_PLUGIN_PATH . 'assets/css/kf-styles.css' )
         );
 
         // Enqueue the main JS file on all front-end pages.
@@ -43,7 +44,7 @@ function kf_enqueue_assets() {
             'kerry-football-main-js',
             $plugin_base_url . 'assets/js/kf-table-controls.js',
             [ 'jquery' ],
-            '1.0.5', // Incremented version number
+            filemtime( KF_PLUGIN_PATH . 'assets/js/kf-table-controls.js' ),
             true // Load the script in the footer
         );
 
@@ -75,7 +76,7 @@ function kf_enqueue_assets() {
                 'kerry-football-game-browser',
                 $plugin_base_url . 'assets/js/kf-game-browser.js',
                 [ 'jquery', 'kerry-football-main-js' ],
-                '1.0.0',
+                filemtime( KF_PLUGIN_PATH . 'assets/js/kf-game-browser.js' ),
                 true
             );
         }
