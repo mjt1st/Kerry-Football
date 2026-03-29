@@ -28,6 +28,10 @@ function kf_can_manage_season( $season_id, $user_id = null ) {
     if ( ! $user_id ) {
         $user_id = get_current_user_id();
     }
+
+    // Site administrators are implicit commissioners in every league.
+    if ( user_can( $user_id, 'manage_options' ) ) return true;
+
     global $wpdb;
 
     // Created this season?
