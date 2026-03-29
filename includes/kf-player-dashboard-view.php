@@ -242,6 +242,11 @@ function kf_player_dashboard_view() {
             <div class="notice notice-info"><p><strong>Commissioner View:</strong> You are not an active player in this season.</p></div>
         <?php endif; ?>
 
+        <div style="margin: 1.5em 0 0.5em; display:flex; gap:0.75em; flex-wrap:wrap;">
+            <a href="<?php echo esc_url( site_url( '/player-stats/' ) ); ?>" class="kf-button kf-button-secondary">📊 My Career Stats</a>
+            <a href="<?php echo esc_url( site_url( '/season-summary/' ) ); ?>" class="kf-button kf-button-secondary">🏆 Season Summary</a>
+        </div>
+
         <h3>Season History</h3>
         <div class="kf-table-wrapper">
             <table class="kf-table">
