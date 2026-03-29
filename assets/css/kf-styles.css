@@ -1308,3 +1308,49 @@
     .kf-confidence-record { display: none; }
     .kf-stat-card-value { font-size: 1.5em; }
 }
+
+/* --- API Settings Info Card --- */
+.kf-api-info-card {
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-left: 4px solid #2563eb;
+    border-radius: 8px;
+    padding: 1.1em 1.25em;
+    margin-top: 1.5em;
+}
+.kf-api-info-card h3 {
+    margin: 0 0 0.9em;
+    font-size: 1em;
+    color: #1e40af;
+}
+.kf-api-info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5em;
+}
+.kf-api-info-block {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 0.85em 1em;
+}
+.kf-api-info-title {
+    font-weight: 700;
+    font-size: 0.9em;
+    color: #111827;
+    margin-bottom: 0.5em;
+    padding-bottom: 0.4em;
+    border-bottom: 1px solid #f3f4f6;
+}
+.kf-api-info-list {
+    margin: 0;
+    padding-left: 1.2em;
+    font-size: 0.85em;
+    color: #374151;
+    line-height: 1.7;
+}
+.kf-api-info-list li { margin-bottom: 2px; }
+.kf-api-info-list strong { color: #111827; }
+@media (max-width: 640px) {
+    .kf-api-info-grid { grid-template-columns: 1fr; }
+}

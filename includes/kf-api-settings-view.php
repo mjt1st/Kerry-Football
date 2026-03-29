@@ -97,13 +97,46 @@ function kf_api_settings_shortcode() {
             </div>
         <?php endif; ?>
 
+        <!-- ============================================================ -->
+        <!-- API REFERENCE CARD                                          -->
+        <!-- ============================================================ -->
+        <div class="kf-api-info-card">
+            <h3>&#9432; API Reference &amp; Limits</h3>
+            <div class="kf-api-info-grid">
+
+                <div class="kf-api-info-block">
+                    <div class="kf-api-info-title">ESPN Scoreboard API</div>
+                    <ul class="kf-api-info-list">
+                        <li><strong>Cost:</strong> Free &mdash; no key required</li>
+                        <li><strong>Rate limit:</strong> None published. Unofficial API; ESPN doesn&rsquo;t enforce strict limits for low-volume use.</li>
+                        <li><strong>Caching:</strong> Results cached for <strong>15 minutes</strong>. Repeated fetches within that window hit the cache, not ESPN.</li>
+                        <li><strong>Score updates:</strong> Cron runs every <strong>15 minutes</strong> during game windows. Scores may lag real-time by up to 15 min.</li>
+                        <li><strong>Odds from ESPN:</strong> Basic spread, O/U, and moneyline are included in the scoreboard response &mdash; no Odds API credits needed for these.</li>
+                        <li><strong>Failure mode:</strong> If ESPN is down or slow, the game browser will show an error. You can always fall back to Manual Entry for that week.</li>
+                    </ul>
+                </div>
+
+                <div class="kf-api-info-block">
+                    <div class="kf-api-info-title">The Odds API</div>
+                    <ul class="kf-api-info-list">
+                        <li><strong>Cost:</strong> Free tier &mdash; <strong>500 requests / month</strong>. Resets on the 1st of each month.</li>
+                        <li><strong>When used:</strong> Only called if an API key is configured below. Fetches enhanced bookmaker-specific lines (FanDuel, DraftKings, etc.) when a week is published.</li>
+                        <li><strong>Credits per week:</strong> ~3 credits to fetch odds on publish. At 17 weeks that&rsquo;s ~51 credits &mdash; well within the free tier.</li>
+                        <li><strong>If credits run out:</strong> ESPN odds are used as a fallback. Players still see spreads; only bookmaker-specific lines are missing.</li>
+                        <li><strong>Optional:</strong> The plugin works fully without an Odds API key. ESPN covers the essentials.</li>
+                    </ul>
+                </div>
+
+            </div>
+        </div>
+
         <form method="POST" class="kf-card" style="margin-top:1.5em;">
             <?php wp_nonce_field( 'kf_save_api_settings', 'kf_api_settings_nonce' ); ?>
 
             <fieldset>
                 <legend>The Odds API</legend>
                 <p class="kf-form-note" style="margin-bottom:1em;">
-                    Provides betting odds, spreads, and over/under for players.
+                    Provides bookmaker-specific odds lines (FanDuel, DraftKings, etc.) to supplement ESPN&rsquo;s built-in spread data.
                     <a href="https://the-odds-api.com/" target="_blank" rel="noopener">Get a free API key</a> (500 requests/month).
                 </p>
 
