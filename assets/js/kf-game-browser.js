@@ -401,6 +401,12 @@
 
         // ---- Render Game Cards ----
         function renderGames(games) {
+            // Preserve checked selections across filter/sort re-renders
+            var selectedIndices = {};
+            gamesList.querySelectorAll('.kf-game-checkbox:checked').forEach(function (cb) {
+                selectedIndices[cb.getAttribute('data-game-index')] = true;
+            });
+
             gamesList.innerHTML = '';
             updateGameStats(games);
 
@@ -427,6 +433,17 @@
                 gamesList.appendChild(h);
                 grouped[dk].forEach(function (g) { gamesList.appendChild(buildGameCard(g)); });
             });
+
+            // Restore checked state for games that were selected before the re-render
+            if (Object.keys(selectedIndices).length) {
+                gamesList.querySelectorAll('.kf-game-checkbox').forEach(function (cb) {
+                    if (selectedIndices[cb.getAttribute('data-game-index')]) {
+                        cb.checked = true;
+                        var card = cb.closest('.kf-game-card');
+                        if (card) card.classList.add('kf-card-selected');
+                    }
+                });
+            }
 
             updateSelectedCount();
         }
