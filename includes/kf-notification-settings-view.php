@@ -1,123 +1,169 @@
 <?php
 /**
  * Shortcode handler for the "Notification Settings" page.
- * Displays controls for players and commissioners to manage email notification preferences.
+ * Shows notification preferences for ALL seasons the player is accepted in,
+ * not just the currently active/selected one.
  *
  * @package Kerry_Football
  */
 
 if (!defined('ABSPATH')) {
-    exit; // Exit if accessed directly
+    exit;
 }
 
 function kf_notification_settings_view() {
     if (!is_user_logged_in()) {
         return '<p>You must be logged in to view this page.</p>';
     }
-    if (session_status() === PHP_SESSION_NONE) {
-        session_start();
-    }
 
     global $wpdb;
-    $user_id = get_current_user_id();
-    $season_id = $_SESSION['kf_active_season_id'] ?? 0;
+    $user_id         = get_current_user_id();
     $is_commissioner = current_user_can('manage_options');
 
-    if (!$season_id) {
-        return '<div class="kf-container"><h1>Notification Settings</h1><p>Please select a season to manage your notification settings.</p></div>';
-    }
-    
-    // MODIFICATION: Added 'picks_ready' and 'picks_reminder' to the list of controllable notifications.
     $notification_types = [
-        'week_finalized' => 'Week Finalized: Receive an email when a week\'s results are in.',
-        'picks_ready'    => 'Picks Ready: Receive an email when a new week is published and ready for picks.',
-        'picks_reminder' => 'Picks Reminder: Receive a reminder email 24 hours before the weekly deadline if you haven\'t submitted picks.'
+        'week_finalized' => 'Week Finalized — receive an email when a week\'s results are posted.',
+        'picks_ready'    => 'Picks Ready — receive an email when a new week is published and open for picks.',
+        'picks_reminder' => 'Picks Reminder — receive a reminder 24 hours before the deadline if you haven\'t submitted picks yet.',
     ];
+
+    // Fetch all seasons this user is accepted in (players) or all active seasons (commissioner).
+    if ($is_commissioner) {
+        $seasons = $wpdb->get_results(
+            "SELECT id, name, is_active FROM {$wpdb->prefix}seasons ORDER BY is_active DESC, id DESC"
+        );
+    } else {
+        $seasons = $wpdb->get_results( $wpdb->prepare(
+            "SELECT s.id, s.name, s.is_active
+             FROM {$wpdb->prefix}seasons s
+             JOIN {$wpdb->prefix}season_players sp ON s.id = sp.season_id
+             WHERE sp.user_id = %d AND sp.status = 'accepted'
+             ORDER BY s.is_active DESC, s.id DESC",
+            $user_id
+        ) );
+    }
 
     ob_start();
     ?>
     <div class="kf-container kf-notification-settings">
         <h1>Notification Settings</h1>
-        
+        <p class="kf-form-note" style="margin-bottom:1.5em;">
+            Manage your email preferences for each season you're participating in.
+            Changes save automatically when you toggle a switch.
+        </p>
+
         <?php if ($is_commissioner) : ?>
             <div class="kf-tabs">
-                <button class="kf-tab-link active" onclick="openTab(event, 'mySettings')">My Personal Settings</button>
-                <button class="kf-tab-link" onclick="openTab(event, 'leagueDefaults')">League Default Settings</button>
+                <button class="kf-tab-link active" onclick="kfOpenTab(event, 'mySettings')">My Personal Settings</button>
+                <button class="kf-tab-link" onclick="kfOpenTab(event, 'leagueDefaults')">League Default Settings</button>
             </div>
         <?php endif; ?>
 
-        <div id="mySettings" class="kf-tab-content" style="display: block;">
-            <h3>My Personal Settings</h3>
-            <p>These settings apply only to you for the current season and will override any league defaults set by the commissioner.</p>
-            <?php kf_display_settings_form($user_id, $season_id, $notification_types); ?>
+        <?php // ---- MY PERSONAL SETTINGS ---- ?>
+        <div id="mySettings" class="kf-tab-content" style="display:block;">
+            <?php if ($is_commissioner) : ?>
+                <h3>My Personal Settings</h3>
+                <p class="kf-form-note">These apply only to you and override the league defaults for each season.</p>
+            <?php endif; ?>
+
+            <?php if (empty($seasons)) : ?>
+                <div class="kf-card"><p>You are not enrolled in any seasons yet.</p></div>
+            <?php else : ?>
+                <?php foreach ($seasons as $season) : ?>
+                    <div class="kf-card" style="margin-bottom:1.5em;">
+                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:1em;padding-bottom:0.75em;border-bottom:1px solid #e5e7eb;">
+                            <h3 style="margin:0;border:none;padding:0;"><?php echo esc_html($season->name); ?></h3>
+                            <?php if ($season->is_active) : ?>
+                                <span class="kf-status-active" style="font-size:0.75em;">Active</span>
+                            <?php else : ?>
+                                <span class="kf-status-archived" style="font-size:0.75em;">Archived</span>
+                            <?php endif; ?>
+                        </div>
+                        <?php kf_display_notification_toggles($user_id, $season->id, $notification_types); ?>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
         </div>
 
+        <?php // ---- LEAGUE DEFAULT SETTINGS (commissioner only) ---- ?>
         <?php if ($is_commissioner) : ?>
-            <div id="leagueDefaults" class="kf-tab-content">
+            <div id="leagueDefaults" class="kf-tab-content" style="display:none;">
                 <h3>League Default Settings</h3>
-                <p>These are the default settings for all players in the current season. Each player can override these defaults on their own settings page.</p>
-                <?php kf_display_settings_form(0, $season_id, $notification_types); // User ID 0 for league defaults ?>
+                <p class="kf-form-note">These are the defaults applied to all players in each season. Individual players can override these on their own settings page.</p>
+
+                <?php if (empty($seasons)) : ?>
+                    <div class="kf-card"><p>No seasons found.</p></div>
+                <?php else : ?>
+                    <?php foreach ($seasons as $season) : ?>
+                        <div class="kf-card" style="margin-bottom:1.5em;">
+                            <div style="display:flex;align-items:center;gap:10px;margin-bottom:1em;padding-bottom:0.75em;border-bottom:1px solid #e5e7eb;">
+                                <h3 style="margin:0;border:none;padding:0;"><?php echo esc_html($season->name); ?></h3>
+                                <?php if ($season->is_active) : ?>
+                                    <span class="kf-status-active" style="font-size:0.75em;">Active</span>
+                                <?php else : ?>
+                                    <span class="kf-status-archived" style="font-size:0.75em;">Archived</span>
+                                <?php endif; ?>
+                            </div>
+                            <?php kf_display_notification_toggles(0, $season->id, $notification_types); ?>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
             </div>
         <?php endif; ?>
     </div>
 
     <script>
-    function openTab(evt, tabName) {
-        var i, tabcontent, tablinks;
-        tabcontent = document.getElementsByClassName("kf-tab-content");
-        for (i = 0; i < tabcontent.length; i++) {
-            tabcontent[i].style.display = "none";
-        }
-        tablinks = document.getElementsByClassName("kf-tab-link");
-        for (i = 0; i < tablinks.length; i++) {
-            tablinks[i].className = tablinks[i].className.replace(" active", "");
-        }
-        document.getElementById(tabName).style.display = "block";
-        evt.currentTarget.className += " active";
+    function kfOpenTab(evt, tabName) {
+        document.querySelectorAll('.kf-tab-content').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('.kf-tab-link').forEach(el => el.classList.remove('active'));
+        document.getElementById(tabName).style.display = 'block';
+        evt.currentTarget.classList.add('active');
     }
-    // Automatically select the first tab if it exists
-    document.addEventListener('DOMContentLoaded', function() {
-        const firstTab = document.querySelector('.kf-tab-link');
-        if(firstTab) {
-            firstTab.click();
-        }
-    });
     </script>
     <?php
     return ob_get_clean();
 }
 
 
-function kf_display_settings_form($user_id, $season_id, $notification_types) {
+/**
+ * Renders the toggle switches for a given user + season combination.
+ * user_id = 0 renders league defaults (commissioner only).
+ */
+function kf_display_notification_toggles($user_id, $season_id, $notification_types) {
     global $wpdb;
     $settings_table = $wpdb->prefix . 'notification_settings';
 
-    $defaults_results = $wpdb->get_results($wpdb->prepare("SELECT notification_type, is_enabled FROM $settings_table WHERE user_id = 0 AND season_id = %d", $season_id), OBJECT_K);
-    
-    $user_settings_results = [];
+    // Always load the league defaults for this season as the fallback
+    $defaults = $wpdb->get_results( $wpdb->prepare(
+        "SELECT notification_type, is_enabled FROM $settings_table WHERE user_id = 0 AND season_id = %d",
+        $season_id
+    ), OBJECT_K );
+
+    // Load personal overrides if rendering for a specific user
+    $personal = [];
     if ($user_id > 0) {
-        $user_settings_results = $wpdb->get_results($wpdb->prepare("SELECT notification_type, is_enabled FROM $settings_table WHERE user_id = %d AND season_id = %d", $user_id, $season_id), OBJECT_K);
+        $personal = $wpdb->get_results( $wpdb->prepare(
+            "SELECT notification_type, is_enabled FROM $settings_table WHERE user_id = %d AND season_id = %d",
+            $user_id, $season_id
+        ), OBJECT_K );
     }
 
-    echo '<div class="kf-card">';
     foreach ($notification_types as $type => $description) {
-        $is_checked = true;
-
+        // Resolve effective value: personal override → league default → on
         if ($user_id > 0) {
-            if (isset($user_settings_results[$type])) {
-                $is_checked = (bool)$user_settings_results[$type]->is_enabled;
-            } elseif (isset($defaults_results[$type])) {
-                $is_checked = (bool)$defaults_results[$type]->is_enabled;
+            if (isset($personal[$type])) {
+                $is_checked = (bool)$personal[$type]->is_enabled;
+            } elseif (isset($defaults[$type])) {
+                $is_checked = (bool)$defaults[$type]->is_enabled;
+            } else {
+                $is_checked = true;
             }
         } else {
-             if (isset($defaults_results[$type])) {
-                $is_checked = (bool)$defaults_results[$type]->is_enabled;
-            }
+            $is_checked = isset($defaults[$type]) ? (bool)$defaults[$type]->is_enabled : true;
         }
         ?>
         <div class="kf-setting-row">
             <label class="kf-switch">
-                <input type="checkbox" 
+                <input type="checkbox"
                        class="kf-notification-toggle"
                        data-user-id="<?php echo esc_attr($user_id); ?>"
                        data-season-id="<?php echo esc_attr($season_id); ?>"
@@ -126,9 +172,8 @@ function kf_display_settings_form($user_id, $season_id, $notification_types) {
                 <span class="kf-slider round"></span>
             </label>
             <span class="kf-setting-description"><?php echo esc_html($description); ?></span>
-            <span class="kf-setting-status" style="display:none; margin-left: 10px;"></span>
+            <span class="kf-setting-status" style="display:none;margin-left:10px;font-size:0.85em;color:#6b7280;"></span>
         </div>
         <?php
     }
-    echo '</div>';
 }
