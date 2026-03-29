@@ -255,6 +255,7 @@ function kf_ajax_fetch_games() {
             'sun-belt'       => 37,
             'mac'            => 15,
             'cusa'           => 12,
+            'ind'            => 9,  // Independents (Notre Dame, etc.)
         ];
         $conf = sanitize_text_field($_POST['conference']);
         if (isset($conf_map[$conf])) {

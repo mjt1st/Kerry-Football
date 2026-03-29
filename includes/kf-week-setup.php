@@ -258,7 +258,9 @@ function kf_week_setup_form() {
 
             <div id="kf-game-browser" style="display:none;margin-top:1.5em;" class="kf-card">
                 <h3 style="margin-top:0;">Browse Games</h3>
-                <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:1em;">
+
+                <!-- Row 1: Sport / Week / Conference (college) / Division (NFL) + Fetch -->
+                <div class="kf-browser-fetch-row">
                     <div class="kf-form-group" style="margin-bottom:0;">
                         <label for="kf-sport-select">Sport</label>
                         <select id="kf-sport-select">
@@ -275,35 +277,89 @@ function kf_week_setup_form() {
                             <?php endfor; ?>
                             <option value="wildcard">Wild Card</option>
                             <option value="divisional">Divisional</option>
-                            <option value="conference">Conference</option>
+                            <option value="conference">Conference Championship</option>
                             <option value="superbowl">Super Bowl</option>
                         </select>
                     </div>
+
+                    <!-- NFL Division filter (client-side, no refetch needed) -->
+                    <div class="kf-form-group" id="kf-division-group" style="margin-bottom:0;">
+                        <label for="kf-division-filter">Division</label>
+                        <select id="kf-division-filter">
+                            <option value="">All Divisions</option>
+                            <optgroup label="AFC">
+                                <option value="afc-east">AFC East</option>
+                                <option value="afc-north">AFC North</option>
+                                <option value="afc-south">AFC South</option>
+                                <option value="afc-west">AFC West</option>
+                            </optgroup>
+                            <optgroup label="NFC">
+                                <option value="nfc-east">NFC East</option>
+                                <option value="nfc-north">NFC North</option>
+                                <option value="nfc-south">NFC South</option>
+                                <option value="nfc-west">NFC West</option>
+                            </optgroup>
+                        </select>
+                    </div>
+
+                    <!-- College Conference filter (server-side, requires refetch) -->
                     <div class="kf-form-group" id="kf-conference-group" style="margin-bottom:0;display:none;">
                         <label for="kf-conference-filter">Conference</label>
                         <select id="kf-conference-filter">
                             <option value="">All Conferences</option>
-                            <option value="sec">SEC</option>
-                            <option value="big-ten">Big Ten</option>
-                            <option value="big-12">Big 12</option>
-                            <option value="acc">ACC</option>
-                            <option value="pac-12">Pac-12</option>
-                            <option value="aac">AAC</option>
-                            <option value="mountain-west">Mountain West</option>
-                            <option value="sun-belt">Sun Belt</option>
-                            <option value="mac">MAC</option>
-                            <option value="cusa">Conference USA</option>
+                            <optgroup label="Power">
+                                <option value="sec">SEC</option>
+                                <option value="big-ten">Big Ten</option>
+                                <option value="big-12">Big 12</option>
+                                <option value="acc">ACC</option>
+                            </optgroup>
+                            <optgroup label="Group of 5">
+                                <option value="aac">American (AAC)</option>
+                                <option value="mountain-west">Mountain West</option>
+                                <option value="sun-belt">Sun Belt</option>
+                                <option value="mac">MAC</option>
+                                <option value="cusa">Conf USA</option>
+                            </optgroup>
+                            <option value="ind">Independents</option>
                         </select>
                     </div>
-                    <button type="button" id="kf-fetch-games-btn" class="kf-button" style="white-space:nowrap;">Fetch Games</button>
+
+                    <button type="button" id="kf-fetch-games-btn" class="kf-button" style="white-space:nowrap;align-self:flex-end;">Fetch Games</button>
                 </div>
 
-                <div id="kf-browser-status" class="kf-browser-status" style="display:none;"></div>
-                <div id="kf-games-list"></div>
+                <div id="kf-browser-status" class="kf-browser-status" style="display:none;margin-top:0.75em;"></div>
 
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1em;padding-top:1em;border-top:1px solid #ddd;">
+                <!-- Row 2: Sort / Spread filter (shown after fetch) -->
+                <div id="kf-sort-filter-bar" class="kf-sort-filter-bar" style="display:none;">
+                    <div class="kf-sort-filter-inner">
+                        <div class="kf-sort-filter-group">
+                            <label>Sort</label>
+                            <select id="kf-sort-select">
+                                <option value="kickoff">Kickoff Time</option>
+                                <option value="spread-biggest">Biggest Favorites First</option>
+                                <option value="spread-closest">Closest Games First</option>
+                                <option value="over-under">Highest O/U First</option>
+                            </select>
+                        </div>
+                        <div class="kf-sort-filter-group">
+                            <label>Show</label>
+                            <select id="kf-spread-filter">
+                                <option value="">All Games</option>
+                                <option value="close">Close only (≤3.5)</option>
+                                <option value="moderate">Moderate (4–9.5)</option>
+                                <option value="big">Big spreads (10+)</option>
+                                <option value="has-odds">Has odds data</option>
+                            </select>
+                        </div>
+                        <div id="kf-game-stats" class="kf-game-stats"></div>
+                    </div>
+                </div>
+
+                <div id="kf-games-list" style="margin-top:0.5em;"></div>
+
+                <div class="kf-browser-footer">
                     <span>Selected: <strong id="kf-selected-count">0</strong> game(s)</span>
-                    <button type="button" id="kf-add-selected-btn" class="kf-button kf-button-action" disabled>Add Selected Games</button>
+                    <button type="button" id="kf-add-selected-btn" class="kf-button kf-button-action" disabled>Add Selected to Week</button>
                 </div>
             </div>
         <?php endif; ?>

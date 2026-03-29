@@ -138,6 +138,40 @@ function kf_normalize_espn_event( $event, $sport ) {
     // Status detail for display (e.g., "Q4 3:42", "Halftime", "Final")
     $status_detail = $competition['status']['type']['shortDetail'] ?? '';
 
+    // ---- Extract ESPN built-in odds (saves Odds API credits) ----
+    $spread_home    = null;
+    $spread_away    = null;
+    $over_under     = null;
+    $moneyline_home = null;
+    $moneyline_away = null;
+    $spread_details = '';  // e.g. "KC -3.5"
+
+    $espn_odds = ! empty( $competition['odds'] ) ? $competition['odds'][0] : null;
+    if ( $espn_odds ) {
+        $spread_details = $espn_odds['details'] ?? '';
+        $over_under     = isset( $espn_odds['overUnder'] ) ? floatval( $espn_odds['overUnder'] ) : null;
+        $moneyline_home = isset( $espn_odds['homeTeamOdds']['moneyLine'] ) ? intval( $espn_odds['homeTeamOdds']['moneyLine'] ) : null;
+        $moneyline_away = isset( $espn_odds['awayTeamOdds']['moneyLine'] ) ? intval( $espn_odds['awayTeamOdds']['moneyLine'] ) : null;
+
+        // Parse "ABBR -X.X" → determine which team is the spread favourite
+        // The number's sign belongs to the referenced team (negative = they give points = favourite)
+        if ( $spread_details === 'PK' || $spread_details === 'EVEN' ) {
+            $spread_home = 0.0;
+            $spread_away = 0.0;
+        } elseif ( preg_match( '/^([A-Z0-9]+)\s+([-+]?\d+\.?\d*)$/i', trim( $spread_details ), $m ) ) {
+            $fav_abbr    = strtoupper( $m[1] );
+            $fav_spread  = floatval( $m[2] ); // already negative for the favourite
+            $home_abbr_u = strtoupper( $home['team']['abbreviation'] ?? '' );
+            if ( $fav_abbr === $home_abbr_u ) {
+                $spread_home = $fav_spread;   // negative → home is favourite
+                $spread_away = -$fav_spread;
+            } else {
+                $spread_away = $fav_spread;   // negative → away is favourite
+                $spread_home = -$fav_spread;
+            }
+        }
+    }
+
     return [
         'espn_game_id'   => $event['id'] ?? '',
         'sport'          => $sport,
@@ -145,6 +179,8 @@ function kf_normalize_espn_event( $event, $sport ) {
         'away_team'      => $away['team']['displayName'] ?? '',
         'home_abbr'      => $home['team']['abbreviation'] ?? '',
         'away_abbr'      => $away['team']['abbreviation'] ?? '',
+        'home_short'     => $home['team']['shortDisplayName'] ?? ( $home['team']['name'] ?? '' ),
+        'away_short'     => $away['team']['shortDisplayName'] ?? ( $away['team']['name'] ?? '' ),
         'home_score'     => isset( $home['score'] ) ? intval( $home['score'] ) : null,
         'away_score'     => isset( $away['score'] ) ? intval( $away['score'] ) : null,
         'game_datetime'  => $event['date'] ?? '',
@@ -153,6 +189,12 @@ function kf_normalize_espn_event( $event, $sport ) {
         'venue'          => $competition['venue']['fullName'] ?? '',
         'broadcast'      => kf_extract_espn_broadcast( $competition ),
         'conference'     => kf_extract_espn_conference( $home, $sport ),
+        'spread_home'    => $spread_home,
+        'spread_away'    => $spread_away,
+        'over_under'     => $over_under,
+        'moneyline_home' => $moneyline_home,
+        'moneyline_away' => $moneyline_away,
+        'spread_details' => $spread_details,
     ];
 }
 

@@ -641,75 +641,202 @@
     border-radius: 8px;
 }
 
-.kf-game-date-header {
-    margin: 1em 0 0.5em;
-    padding-bottom: 4px;
-    border-bottom: 1px solid #ddd;
-    font-size: 0.95em;
-    color: #555;
-}
+/* --- Game Browser v2 --- */
 
-.kf-game-row {
+/* Fetch controls row */
+.kf-browser-fetch-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: flex-end;
+    margin-bottom: 0.75em;
+}
+.kf-browser-fetch-row .kf-form-group { margin-bottom: 0; }
+.kf-browser-fetch-row select { min-width: 130px; }
+
+/* Sort/filter bar (shown after fetch) */
+.kf-sort-filter-bar {
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 0.6em 0.9em;
+    margin-bottom: 0.75em;
+}
+.kf-sort-filter-inner {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1em;
+    align-items: center;
+}
+.kf-sort-filter-group {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 8px 12px;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: background 0.15s;
+    gap: 6px;
 }
-.kf-game-row:hover {
-    background: #f0f7ff;
-}
-
-.kf-game-checkbox {
-    transform: scale(1.3);
-    flex-shrink: 0;
-}
-
-.kf-game-time {
-    color: #666;
-    font-size: 0.9em;
-    min-width: 75px;
-    flex-shrink: 0;
-}
-
-.kf-game-teams {
+.kf-sort-filter-group label {
+    font-size: 0.82em;
     font-weight: 600;
-    flex: 1;
+    color: #6b7280;
+    white-space: nowrap;
+}
+.kf-sort-filter-group select {
+    font-size: 0.85em;
+    padding: 4px 8px;
+}
+.kf-game-stats {
+    font-size: 0.82em;
+    color: #6b7280;
+    margin-left: auto;
 }
 
-.kf-game-broadcast {
-    color: #888;
+/* Date group header */
+.kf-game-date-header {
+    margin: 1em 0 0.4em;
+    padding-bottom: 4px;
+    border-bottom: 2px solid #e5e7eb;
+    font-size: 0.9em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6b7280;
+}
+
+/* Game cards */
+.kf-game-card {
+    display: block;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 0.6em 0.85em;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+    background: #fff;
+}
+.kf-game-card:hover { background: #f0f7ff; border-color: #93c5fd; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+.kf-game-card:has(.kf-game-checkbox:checked) { background: #eff6ff; border-color: #3b82f6; }
+
+/* Card header row: checkbox · time · network · badge */
+.kf-game-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 5px;
+}
+.kf-game-checkbox {
+    transform: scale(1.25);
+    flex-shrink: 0;
+    cursor: pointer;
+    accent-color: #2563eb;
+}
+.kf-game-time {
     font-size: 0.85em;
+    color: #6b7280;
+    min-width: 72px;
+    flex-shrink: 0;
+}
+.kf-game-broadcast {
+    font-size: 0.78em;
+    color: #9ca3af;
     font-style: italic;
 }
 
-.kf-game-status {
-    font-size: 0.8em;
-    font-weight: bold;
-    padding: 2px 8px;
-    border-radius: 10px;
+/* Live / Final status tag */
+.kf-gb-status {
+    font-size: 0.72em;
+    font-weight: 700;
+    padding: 1px 7px;
+    border-radius: 99px;
 }
-.kf-game-status.kf-status-in_progress {
-    background: #dc3545;
-    color: #fff;
-}
-.kf-game-status.kf-status-final {
-    background: #28a745;
-    color: #fff;
-}
+.kf-gb-status-live  { background: #fee2e2; color: #b91c1c; }
+.kf-gb-status-final { background: #dcfce7; color: #166534; }
 
-.kf-browser-status {
-    padding: 8px 12px;
-    border-radius: 4px;
-    margin-bottom: 1em;
+/* Spread badge — pushed to the right with margin-left:auto */
+.kf-spread-badge {
+    margin-left: auto;
+    font-size: 0.78em;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 99px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.kf-spread-none     { background: #f3f4f6; color: #9ca3af; }
+.kf-spread-pk       { background: #f3f4f6; color: #6b7280; }
+.kf-spread-close    { background: #dcfce7; color: #166534; }   /* ≤3   — close game */
+.kf-spread-moderate { background: #dbeafe; color: #1e40af; }   /* 3.5–6.5 */
+.kf-spread-big      { background: #fef3c7; color: #92400e; }   /* 7–13.5  */
+.kf-spread-blowout  { background: #fee2e2; color: #991b1b; }   /* 14+  — blowout */
+
+/* Teams row */
+.kf-game-card-teams {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.95em;
+    flex-wrap: wrap;
+}
+.kf-team-away, .kf-team-home {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+}
+.kf-team-abbr {
+    font-weight: 700;
+    color: #111827;
+    font-size: 1em;
+}
+.kf-team-name {
+    color: #374151;
     font-size: 0.9em;
 }
-.kf-browser-status.kf-status-info { background: #e3f2fd; color: #1565c0; }
+.kf-game-at {
+    color: #9ca3af;
+    font-size: 0.85em;
+    font-weight: 600;
+}
+.kf-game-score {
+    margin-left: auto;
+    font-weight: 700;
+    color: #1d4ed8;
+    font-size: 0.9em;
+}
+
+/* Odds sub-row */
+.kf-game-card-odds {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1em;
+    margin-top: 5px;
+    font-size: 0.8em;
+    color: #6b7280;
+    border-top: 1px dashed #f3f4f6;
+    padding-top: 4px;
+}
+.kf-game-card-odds strong { color: #374151; }
+.kf-ml-label { color: #9ca3af; }
+
+/* Browser status message */
+.kf-browser-status {
+    padding: 7px 12px;
+    border-radius: 6px;
+    font-size: 0.88em;
+}
+.kf-browser-status.kf-status-info    { background: #e3f2fd; color: #1565c0; }
 .kf-browser-status.kf-status-success { background: #e8f5e9; color: #2e7d32; }
 .kf-browser-status.kf-status-warning { background: #fff3e0; color: #e65100; }
-.kf-browser-status.kf-status-error { background: #fce4ec; color: #c62828; }
+.kf-browser-status.kf-status-error   { background: #fce4ec; color: #c62828; }
+
+/* Browser footer */
+.kf-browser-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 1em;
+    padding-top: 0.75em;
+    border-top: 1px solid #e5e7eb;
+    font-size: 0.9em;
+    color: #6b7280;
+}
 
 /* --- API Badge on Matchup Fieldsets --- */
 .kf-api-badge {
