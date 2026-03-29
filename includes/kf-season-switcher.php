@@ -52,13 +52,25 @@ function kf_can_manage_season( $season_id, $user_id = null ) {
 // Manage session for active season
 function kf_manage_active_season_session() {
     if (!is_user_logged_in()) { return; }
-    if (session_status() === PHP_SESSION_NONE) { 
-        session_start(); 
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
     }
-    if (isset($_SESSION['kf_active_season_id'])) { return; }
 
     global $wpdb;
     $user_id = get_current_user_id();
+
+    // If a season ID is already in session, validate that this user still belongs to it.
+    // This guards against stale sessions after a user is removed from a season,
+    // or a session fixation scenario where the session contains an arbitrary ID.
+    if (isset($_SESSION['kf_active_season_id'])) {
+        $session_season_id = (int) $_SESSION['kf_active_season_id'];
+        $still_valid = kf_can_manage_season( $session_season_id, $user_id );
+        if ($still_valid) {
+            return; // Valid — nothing to do.
+        }
+        // Not valid — clear and fall through to pick a new default.
+        unset($_SESSION['kf_active_season_id']);
+    }
     $cache_key = 'kf_default_season_' . $user_id;
     $default_season_id = get_transient($cache_key);
     if (false === $default_season_id) {

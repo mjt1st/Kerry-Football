@@ -76,7 +76,8 @@ function kf_install_db() {
         point_values TEXT DEFAULT NULL,
         tie_data TEXT DEFAULT NULL,
         PRIMARY KEY  (id),
-        KEY season_id (season_id)
+        KEY season_id (season_id),
+        KEY idx_weeks_season_status (season_id, status)
     ) $charset_collate;";
 
     // --- edk_matchups ---
@@ -102,7 +103,8 @@ function kf_install_db() {
         over_under DECIMAL(4,1) DEFAULT NULL,
         odds_updated_at DATETIME DEFAULT NULL,
         PRIMARY KEY  (id),
-        KEY week_id (week_id)
+        KEY week_id (week_id),
+        KEY idx_matchups_espn_status (espn_game_id, game_status)
     ) $charset_collate;";
 
     // --- edk_api_usage ---
@@ -131,7 +133,9 @@ function kf_install_db() {
         submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP, -- RECONCILED: Added this column back to track submission times.
         PRIMARY KEY  (id),
         KEY user_id (user_id),
-        KEY week_id (week_id)
+        KEY week_id (week_id),
+        KEY idx_picks_week_user_bpow (week_id, user_id, is_bpow),
+        KEY idx_picks_matchup_bpow (matchup_id, is_bpow)
     ) $charset_collate;";
 
     // --- edk_scores ---
@@ -167,7 +171,8 @@ function kf_install_db() {
         PRIMARY KEY  (id),
         KEY user_id (user_id),
         KEY week_id (week_id),
-        KEY replaced_by_week_id (replaced_by_week_id)
+        KEY replaced_by_week_id (replaced_by_week_id),
+        KEY idx_score_history_user_season_week (user_id, replaced_by_week_id)
     ) $charset_collate;";
 
     // --- edk_double_down_log ---

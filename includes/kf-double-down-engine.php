@@ -134,10 +134,11 @@ function kf_apply_double_down_for_week($source_week_id, $season_id) {
 function kf_reverse_double_down_for_week($source_week_id) {
     global $wpdb;
 
-    $scores_table = $wpdb->prefix . 'scores';
+    $scores_table        = $wpdb->prefix . 'scores';
     $score_history_table = $wpdb->prefix . 'score_history';
     $dd_selections_table = $wpdb->prefix . 'dd_selections';
-    $weeks_table = $wpdb->prefix . 'weeks';
+    $dd_log_table        = $wpdb->prefix . 'double_down_log';
+    $weeks_table         = $wpdb->prefix . 'weeks';
 
     $history_entries = $wpdb->get_results($wpdb->prepare(
         "SELECT * FROM $score_history_table WHERE replaced_by_week_id = %d",
@@ -148,7 +149,9 @@ function kf_reverse_double_down_for_week($source_week_id) {
         error_log("DD REVERSAL (Source Week $source_week_id): No DD transactions originated from this week. Nothing to reverse.");
         return;
     }
-    
+
+    $season_id = $wpdb->get_var($wpdb->prepare("SELECT season_id FROM $weeks_table WHERE id = %d", $source_week_id));
+
     foreach ($history_entries as $entry) {
         $wpdb->update($scores_table,
             [
@@ -163,15 +166,24 @@ function kf_reverse_double_down_for_week($source_week_id) {
             ]
         );
 
-        $season_id = $wpdb->get_var($wpdb->prepare("SELECT season_id FROM $weeks_table WHERE id = %d", $source_week_id));
         if ($season_id) {
+            // Restore the dd_selection so the player can re-use their DD.
             $wpdb->replace($dd_selections_table, [
                 'user_id'   => $entry->user_id,
                 'week_id'   => $source_week_id,
                 'season_id' => $season_id,
             ]);
+
+            // Remove from double_down_log so the week is no longer considered "used".
+            // Without this, the player would be permanently blocked from re-applying DD
+            // to this week even after a reversal.
+            $wpdb->delete($dd_log_table, [
+                'user_id'        => $entry->user_id,
+                'season_id'      => $season_id,
+                'source_week_id' => $source_week_id,
+            ]);
         }
-        
+
         $wpdb->delete($score_history_table, ['id' => $entry->id]);
 
         error_log("DD REVERSAL (Source Week $source_week_id): SUCCESS. Restored original score for Player {$entry->user_id} on Target Week {$entry->week_id}.");

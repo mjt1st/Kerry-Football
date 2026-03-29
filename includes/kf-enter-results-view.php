@@ -142,6 +142,17 @@ function kf_enter_results_shortcode() {
         <h2 style=”margin-top:0;”>Week <?php echo esc_html($week->week_number); ?> of <?php echo esc_html($season_name); ?></h2>
         <a href=”<?php echo esc_url(site_url('/manage-weeks/')); ?>”>&larr; Back to Manage Weeks</a>
 
+        <?php
+        // Warn commissioner if auto-score is turned off for an API week
+        if ($is_api_week && get_option('kf_auto_score_enabled', '1') !== '1'):
+        ?>
+            <div style=”background:#fef3c7;border:1px solid #f59e0b;border-left:4px solid #d97706;border-radius:6px;padding:10px 16px;margin-top:1em;font-size:0.92em;”>
+                <strong>⚠️ Auto-score is disabled.</strong>
+                Results will <em>not</em> be filled in automatically from ESPN. You must enter them manually, or
+                <a href=”<?php echo esc_url(site_url('/api-settings/')); ?>”>enable auto-score in API Settings</a>.
+            </div>
+        <?php endif; ?>
+
         <?php if ($is_api_week): ?>
             <div style=”display:flex;justify-content:flex-end;margin-top:1em;”>
                 <button type=”button” id=”kf-refresh-scores-btn” class=”kf-button” onclick=”kfRefreshScores(<?php echo intval($week_id); ?>)”>&#128260; Refresh Scores Now</button>

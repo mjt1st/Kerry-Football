@@ -107,6 +107,12 @@ function kf_commissioner_dashboard_shortcode() {
         ) );
     }
 
+    // --- Cron Health Data ---
+    $cron_last_run        = (int) get_option( 'kf_cron_last_run', 0 );
+    $cron_failures        = (int) get_option( 'kf_cron_consecutive_failures', 0 );
+    $auto_score_enabled   = get_option( 'kf_auto_score_enabled', '1' ) === '1';
+    $cron_next_scheduled  = wp_next_scheduled( 'kf_check_game_scores' );
+
     ob_start();
     ?>
     <div class="kf-container">
@@ -116,6 +122,45 @@ function kf_commissioner_dashboard_shortcode() {
                 <a href="<?php echo esc_url(site_url('/api-settings/')); ?>" class="kf-button kf-button-secondary">&#9881; API Settings</a>
                 <a href="<?php echo esc_url(site_url('/season-setup/')); ?>" class="kf-button">Create New Season</a>
             </div>
+        </div>
+
+        <?php
+        // --- Cron Health Panel ---
+        $cron_minutes_ago = $cron_last_run ? (int) round( ( time() - $cron_last_run ) / 60 ) : null;
+        $cron_status_color  = '#16a34a'; // green
+        $cron_status_label  = '';
+        $cron_status_detail = '';
+
+        if ( ! $auto_score_enabled ) {
+            $cron_status_color  = '#92400e';
+            $cron_status_label  = '⚠️ Auto-score disabled';
+            $cron_status_detail = 'Scores will not update automatically. Enable in <a href="' . esc_url( site_url( '/api-settings/' ) ) . '">API Settings</a>.';
+        } elseif ( ! $cron_next_scheduled ) {
+            $cron_status_color  = '#dc2626';
+            $cron_status_label  = '🔴 Score cron NOT scheduled';
+            $cron_status_detail = 'WP-Cron has lost the score-check event. Deactivate and reactivate the plugin to reschedule it.';
+        } elseif ( $cron_last_run === 0 ) {
+            $cron_status_color  = '#2563eb';
+            $cron_status_label  = '🔵 Cron scheduled — never run yet';
+            $cron_status_detail = 'Next run: ' . esc_html( human_time_diff( $cron_next_scheduled, time() ) ) . ' from now.';
+        } elseif ( $cron_failures >= 3 ) {
+            $cron_status_color  = '#dc2626';
+            $cron_status_label  = "🔴 ESPN fetch failing ({$cron_failures} consecutive errors)";
+            $cron_status_detail = 'Last run: ' . esc_html( $cron_minutes_ago ) . ' min ago. Check ESPN API or switch to manual mode.';
+        } elseif ( $cron_minutes_ago > 60 ) {
+            $cron_status_color  = '#d97706';
+            $cron_status_label  = "🟡 Last run: {$cron_minutes_ago} min ago";
+            $cron_status_detail = 'Score updates may be delayed. WP-Cron requires site traffic to trigger. Next scheduled: ' . esc_html( human_time_diff( $cron_next_scheduled, time() ) ) . ' from now.';
+        } else {
+            $cron_status_label  = "✅ Last scores checked: {$cron_minutes_ago} min ago";
+            $cron_status_detail = 'Next run: ~' . esc_html( human_time_diff( $cron_next_scheduled, time() ) ) . ' from now.';
+        }
+        ?>
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid <?php echo esc_attr($cron_status_color); ?>;border-radius:6px;padding:10px 16px;margin-bottom:1.5em;font-size:0.9em;">
+            <strong style="color:<?php echo esc_attr($cron_status_color); ?>;"><?php echo $cron_status_label; ?></strong>
+            <?php if ( $cron_status_detail ): ?>
+                <span style="color:#64748b;margin-left:12px;"><?php echo $cron_status_detail; ?></span>
+            <?php endif; ?>
         </div>
 
         <div class="kf-table-wrapper">

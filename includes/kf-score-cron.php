@@ -58,6 +58,14 @@ function kf_cron_check_scores() {
         return;
     }
 
+    // Transient lock: prevent concurrent execution (e.g. two cron workers firing at once).
+    // Lock expires after 5 minutes — well beyond any realistic ESPN fetch time.
+    if ( get_transient( 'kf_score_cron_running' ) ) {
+        error_log( 'Kerry Football: kf_cron_check_scores skipped — previous run still in progress.' );
+        return;
+    }
+    set_transient( 'kf_score_cron_running', 1, 5 * MINUTE_IN_SECONDS );
+
     global $wpdb;
     $matchups_table = $wpdb->prefix . 'matchups';
     $weeks_table    = $wpdb->prefix . 'weeks';
@@ -78,6 +86,7 @@ function kf_cron_check_scores() {
     );
 
     if ( empty( $pending_matchups ) ) {
+        delete_transient( 'kf_score_cron_running' );
         return; // Nothing to check
     }
 
@@ -104,8 +113,18 @@ function kf_cron_check_scores() {
     }
 
     if ( empty( $scores ) ) {
+        // Record consecutive ESPN failures for health dashboard
+        $failures = (int) get_option( 'kf_cron_consecutive_failures', 0 ) + 1;
+        update_option( 'kf_cron_consecutive_failures', $failures );
+        if ( $failures >= 3 ) {
+            error_log( "Kerry Football: ESPN score fetch has failed {$failures} consecutive times. Check ESPN API connectivity." );
+        }
+        delete_transient( 'kf_score_cron_running' );
         return;
     }
+
+    // Reset failure counter on success
+    update_option( 'kf_cron_consecutive_failures', 0 );
 
     // Update each matchup with fresh score data
     foreach ( $pending_matchups as $matchup ) {
@@ -152,6 +171,12 @@ function kf_cron_check_scores() {
             [ 'id' => $matchup->id ]
         );
     }
+
+    // Record successful run time for health monitoring dashboard.
+    update_option( 'kf_cron_last_run', time() );
+
+    // Release the concurrency lock.
+    delete_transient( 'kf_score_cron_running' );
 }
 add_action( 'kf_check_game_scores', 'kf_cron_check_scores' );
 
