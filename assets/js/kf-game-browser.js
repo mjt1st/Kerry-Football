@@ -1,11 +1,12 @@
 /**
- * Kerry Football — Game Browser (v2)
+ * Kerry Football — Game Browser (v3)
  *
  * Redesigned game browser with:
  *  - Game cards with spread badges and color coding
  *  - Sort by kickoff / biggest spread / closest games / O/U
  *  - NFL division filter (client-side, no re-fetch)
- *  - College conference filter (server-side, triggers re-fetch)
+ *  - College conference filter (client-side, no re-fetch — full FBS fetched once)
+ *  - Team search input (filters by team name, client-side)
  *  - Spread range filter
  *  - Team abbreviation dictionary (abbreviated names stored in DB)
  *  - Quick stats summary after fetch
@@ -147,6 +148,26 @@
     };
 
     // =========================================================================
+    // COLLEGE CONFERENCE MAP (client-side filter — ESPN conferenceId per game)
+    // The server always returns all FBS games (groups=80); we filter here.
+    // Keys match the <option value="..."> in the conference dropdown.
+    // Values are the ESPN conferenceId strings returned in game.conference.
+    // =========================================================================
+    var COLLEGE_CONF_MAP = {
+        'sec':           '8',
+        'big-ten':       '5',
+        'big-12':        '4',
+        'acc':           '1',
+        'pac-12':        '9',
+        'aac':           '151',
+        'mountain-west': '17',
+        'sun-belt':      '37',
+        'mac':           '15',
+        'cusa':          '12',
+        // 'fbs' and '' mean "show all" — no filtering needed
+    };
+
+    // =========================================================================
     // DOM READY
     // =========================================================================
     document.addEventListener('DOMContentLoaded', function () {
@@ -163,6 +184,7 @@
         var divGroup      = document.getElementById('kf-division-group');
         var sortSelect    = document.getElementById('kf-sort-select');
         var spreadFilter  = document.getElementById('kf-spread-filter');
+        var searchInput   = document.getElementById('kf-game-search');
         var sortFilterBar = document.getElementById('kf-sort-filter-bar');
         var selectedCount = document.getElementById('kf-selected-count');
         var statusMsg     = document.getElementById('kf-browser-status');
@@ -246,10 +268,12 @@
             matchupCountWatcher.addEventListener('change', updateSelectedCount);
         }
 
-        // ---- Division / sort / spread filters: re-render existing results ----
-        if (divFilter)   divFilter.addEventListener('change',   function () { if (fetchedGames.length) renderGames(getFilteredSorted()); });
-        if (sortSelect)  sortSelect.addEventListener('change',  function () { if (fetchedGames.length) renderGames(getFilteredSorted()); });
-        if (spreadFilter) spreadFilter.addEventListener('change', function () { if (fetchedGames.length) renderGames(getFilteredSorted()); });
+        // ---- All filters: re-render existing results (no re-fetch) ----
+        if (divFilter)    divFilter.addEventListener('change',   function () { if (fetchedGames.length) renderGames(getFilteredSorted()); });
+        if (confFilter)   confFilter.addEventListener('change',  function () { if (fetchedGames.length) renderGames(getFilteredSorted()); });
+        if (sortSelect)   sortSelect.addEventListener('change',  function () { if (fetchedGames.length) renderGames(getFilteredSorted()); });
+        if (spreadFilter) spreadFilter.addEventListener('change',function () { if (fetchedGames.length) renderGames(getFilteredSorted()); });
+        if (searchInput)  searchInput.addEventListener('input',  function () { if (fetchedGames.length) renderGames(getFilteredSorted()); });
 
         // ---- Fetch Games ----
         if (fetchBtn) {
@@ -269,15 +293,14 @@
             gamesList.innerHTML = '';
             fetchedGames = [];
             if (sortFilterBar) sortFilterBar.style.display = 'none';
+            if (searchInput) searchInput.value = '';
 
             var fd = new FormData();
             fd.append('action', 'kf_fetch_games');
             fd.append('nonce',  kf_ajax_data.nonce);
             fd.append('sport',  sport);
             fd.append('week',   week);
-            if (confFilter && sport === 'college-football' && confFilter.value) {
-                fd.append('conference', confFilter.value);
-            }
+            // Conference filter is now client-side — all FBS games are fetched in one request
 
             fetch(kf_ajax_data.ajax_url, { method: 'POST', body: fd })
                 .then(function (r) { return r.json(); })
@@ -302,10 +325,12 @@
 
         // ---- Filter + Sort pipeline ----
         function getFilteredSorted() {
-            var sport   = sportSelect   ? sportSelect.value   : 'nfl';
-            var divVal  = divFilter     ? divFilter.value     : '';
-            var sfVal   = spreadFilter  ? spreadFilter.value  : '';
-            var sortVal = sortSelect    ? sortSelect.value    : 'kickoff';
+            var sport      = sportSelect   ? sportSelect.value              : 'nfl';
+            var divVal     = divFilter     ? divFilter.value                : '';
+            var confVal    = confFilter    ? confFilter.value               : '';
+            var sfVal      = spreadFilter  ? spreadFilter.value             : '';
+            var sortVal    = sortSelect    ? sortSelect.value               : 'kickoff';
+            var searchTerm = searchInput   ? searchInput.value.trim().toLowerCase() : '';
 
             var games = fetchedGames.slice();
 
@@ -314,6 +339,30 @@
                 var allowed = NFL_DIVISIONS[divVal];
                 games = games.filter(function (g) {
                     return allowed.indexOf(g.home_abbr) !== -1 || allowed.indexOf(g.away_abbr) !== -1;
+                });
+            }
+
+            // College conference filter (client-side — full FBS list is fetched once)
+            if (sport === 'college-football' && confVal && confVal !== 'fbs' && COLLEGE_CONF_MAP[confVal]) {
+                var confId = COLLEGE_CONF_MAP[confVal];
+                games = games.filter(function (g) {
+                    // game.conference holds the ESPN conferenceId string from the home team
+                    return String(g.conference) === confId;
+                });
+            }
+
+            // Team search filter (matches away or home team name, abbreviation, or short name)
+            if (searchTerm) {
+                games = games.filter(function (g) {
+                    var haystack = [
+                        g.away_team  || '',
+                        g.home_team  || '',
+                        g.away_abbr  || '',
+                        g.home_abbr  || '',
+                        g.away_short || '',
+                        g.home_short || '',
+                    ].join(' ').toLowerCase();
+                    return haystack.indexOf(searchTerm) !== -1;
                 });
             }
 

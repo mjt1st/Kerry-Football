@@ -382,11 +382,24 @@ function kf_week_summary_view() {
                     <?php if ($week->status === 'draft'): ?>
                         <a href="<?php echo esc_url(add_query_arg(['week_id' => $week->id], site_url('/week-setup/'))); ?>" class="kf-button">Edit Week</a>
                     <?php endif; ?>
-                    <?php if ($week->status === 'published' && !$needs_resolution): ?>
-                        <form id="kf-finalize-form" method="post" action="" style="display:inline-block;">
-                            <?php wp_nonce_field('kf_finalize_week_nonce', 'kf_finalize_week_nonce_field'); ?>
-                            <button type="submit" name="action" value="finalize_week" class="kf-button kf-button-action">Finalize Week</button>
-                        </form>
+                    <?php if ($week->status === 'published' && !$needs_resolution):
+                        // Guard: only show Finalize button if all non-tiebreaker matchups have a result
+                        $total_matchup_count  = count($regular_matchups) + ($tiebreaker_matchup ? 1 : 0);
+                        $results_entered      = 0;
+                        foreach ($regular_matchups as $m) {
+                            if ($m->result !== null && $m->result !== '') $results_entered++;
+                        }
+                        if ($tiebreaker_matchup && $tiebreaker_matchup->result !== null && $tiebreaker_matchup->result !== '') {
+                            $results_entered++;
+                        }
+                        $all_results_done = ($results_entered >= $total_matchup_count && $total_matchup_count > 0);
+                    ?>
+                        <div id="kf-finalize-wrapper" data-results-complete="<?php echo $all_results_done ? '1' : '0'; ?>">
+                            <form id="kf-finalize-form" method="post" action="" style="display:inline-block;">
+                                <?php wp_nonce_field('kf_finalize_week_nonce', 'kf_finalize_week_nonce_field'); ?>
+                                <button type="submit" name="action" value="finalize_week" class="kf-button kf-button-action">Finalize Week</button>
+                            </form>
+                        </div>
                     <?php elseif ($week->status === 'tie_resolution_needed'): ?>
                         <div class="kf-finalized-controls">
                             <span class="kf-status-tie-resolution">Tie Resolution Needed - Please resolve ties above</span>
@@ -694,7 +707,187 @@ function kf_week_summary_view() {
             </div>
         </div>
     </div>
-    
+
+    <?php if (!$is_finalized && (!$picks_are_hidden || $is_commissioner) && !empty($regular_matchups)):
+        // Build JSON data for the scenario simulator
+        $js_sim_players = [];
+        foreach ($players as $pid => $pname) {
+            $js_sim_players[(string)$pid] = $pname;
+        }
+        $js_sim_matchups = [];
+        foreach ($regular_matchups as $m) {
+            $js_sim_matchups[] = [
+                'id'     => (int)$m->id,
+                'label'  => $m->team_b . ' @ ' . $m->team_a,
+                'team_a' => $m->team_a,
+                'team_b' => $m->team_b,
+                'result' => ($m->result !== null && $m->result !== '') ? $m->result : null,
+            ];
+        }
+        $js_sim_picks = [];
+        foreach ($regular_matchups as $m) {
+            $mid = (string)$m->id;
+            $js_sim_picks[$mid] = [];
+            foreach ($players as $pid => $pname) {
+                $pick_obj = $std_picks_map[$m->id][$pid] ?? null;
+                if ($pick_obj) {
+                    $js_sim_picks[$mid][(string)$pid] = [
+                        'pick'   => $pick_obj->pick,
+                        'points' => (int)$pick_obj->point_value,
+                    ];
+                }
+            }
+        }
+        $unresolved_count = 0;
+        foreach ($regular_matchups as $m) {
+            if ($m->result === null || $m->result === '') $unresolved_count++;
+        }
+        $js_sim_current = [];
+        foreach ($players as $pid => $pname) {
+            $js_sim_current[(string)$pid] = $week_totals[$pid] ?? 0;
+        }
+    ?>
+    <div class="kf-scenario-panel kf-no-print" id="kf-scenario-panel">
+        <div class="kf-scenario-header" id="kf-scenario-toggle" role="button" tabindex="0"
+             onclick="(document.getElementById('kf-scenario-body').style.display==='none')?kfScenarioOpen():kfScenarioClose()"
+             onkeydown="if(event.key==='Enter'||event.key===' '){this.click();}">
+            <span>&#128302; What If? Scenario Simulator</span>
+            <?php if ($unresolved_count > 0): ?>
+                <span class="kf-scenario-badge"><?php echo intval($unresolved_count); ?> game<?php echo $unresolved_count !== 1 ? 's' : ''; ?> remaining</span>
+            <?php else: ?>
+                <span class="kf-scenario-badge kf-scenario-badge-done">All results in</span>
+            <?php endif; ?>
+            <span class="kf-scenario-chevron" id="kf-scenario-chevron">&#9654;</span>
+        </div>
+        <div class="kf-scenario-body" id="kf-scenario-body" style="display:none;">
+            <p class="kf-scenario-intro">Select hypothetical outcomes for games to see projected standings in real time.</p>
+            <div class="kf-scenario-games" id="kf-scenario-games">
+                <?php foreach ($regular_matchups as $m): ?>
+                    <div class="kf-scenario-game-row">
+                        <span class="kf-scenario-game-label"><?php echo esc_html($m->team_b . ' @ ' . $m->team_a); ?></span>
+                        <?php if ($m->result !== null && $m->result !== ''): ?>
+                            <span class="kf-scenario-game-result kf-scenario-locked">&#10003; <?php echo esc_html($m->result); ?></span>
+                        <?php else: ?>
+                            <select class="kf-scenario-select" data-matchup-id="<?php echo esc_attr($m->id); ?>" onchange="kfScenarioCompute()">
+                                <option value="">&#8212; Pick outcome &#8212;</option>
+                                <option value="<?php echo esc_attr($m->team_b); ?>"><?php echo esc_html($m->team_b); ?></option>
+                                <option value="<?php echo esc_attr($m->team_a); ?>"><?php echo esc_html($m->team_a); ?></option>
+                                <option value="TIE">TIE</option>
+                            </select>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            <div class="kf-scenario-standings" id="kf-scenario-standings" style="display:none;">
+                <h4 class="kf-scenario-standings-title">&#128202; Projected Standings</h4>
+                <table class="kf-scenario-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Player</th>
+                            <th>Proj. Pts</th>
+                            <th>vs Now</th>
+                        </tr>
+                    </thead>
+                    <tbody id="kf-scenario-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <script>
+    (function() {
+        var KF_SIM = {
+            players:  <?php echo wp_json_encode($js_sim_players); ?>,
+            matchups: <?php echo wp_json_encode($js_sim_matchups); ?>,
+            picks:    <?php echo wp_json_encode($js_sim_picks); ?>,
+            current:  <?php echo wp_json_encode($js_sim_current); ?>
+        };
+
+        function kfScenarioOpen() {
+            document.getElementById('kf-scenario-body').style.display = 'block';
+            document.getElementById('kf-scenario-chevron').innerHTML = '&#9660;';
+            // Auto-compute if no games are pending
+            var allLocked = KF_SIM.matchups.every(function(m) { return m.result !== null; });
+            if (allLocked) { kfScenarioCompute(); }
+        }
+        function kfScenarioClose() {
+            document.getElementById('kf-scenario-body').style.display = 'none';
+            document.getElementById('kf-scenario-chevron').innerHTML = '&#9654;';
+        }
+        window.kfScenarioOpen  = kfScenarioOpen;
+        window.kfScenarioClose = kfScenarioClose;
+
+        window.kfScenarioCompute = function() {
+            // Gather outcomes: locked results + user-selected hypothetical outcomes
+            var outcomes = {};
+            KF_SIM.matchups.forEach(function(m) {
+                if (m.result !== null && m.result !== '') {
+                    outcomes[String(m.id)] = m.result;
+                }
+            });
+            document.querySelectorAll('.kf-scenario-select').forEach(function(sel) {
+                if (sel.value) {
+                    outcomes[sel.getAttribute('data-matchup-id')] = sel.value;
+                }
+            });
+
+            // Compute projected points for each player
+            var projected = {};
+            Object.keys(KF_SIM.players).forEach(function(pid) { projected[pid] = 0; });
+            KF_SIM.matchups.forEach(function(m) {
+                var result = outcomes[String(m.id)];
+                if (!result) return;
+                var mPicks = KF_SIM.picks[String(m.id)] || {};
+                var isTie = (result.toLowerCase() === 'tie');
+                Object.keys(mPicks).forEach(function(pid) {
+                    var p = mPicks[pid];
+                    if (!p) return;
+                    if (isTie) {
+                        projected[pid] = (projected[pid] || 0) + Math.floor(p.points / 2);
+                    } else if (p.pick && p.pick.toLowerCase() === result.toLowerCase()) {
+                        projected[pid] = (projected[pid] || 0) + p.points;
+                    }
+                });
+            });
+
+            // Build and sort standings
+            var standings = Object.keys(KF_SIM.players).map(function(pid) {
+                return {
+                    id: pid,
+                    name: KF_SIM.players[pid],
+                    projected: projected[pid] || 0,
+                    current: KF_SIM.current[pid] || 0
+                };
+            });
+            standings.sort(function(a, b) { return b.projected - a.projected; });
+
+            // Render the standings table
+            var tbody = document.getElementById('kf-scenario-tbody');
+            tbody.innerHTML = '';
+            standings.forEach(function(p, i) {
+                var delta = p.projected - p.current;
+                var deltaStr, deltaClass;
+                if (delta > 0)      { deltaStr = '+' + delta; deltaClass = 'kf-scenario-delta-up'; }
+                else if (delta < 0) { deltaStr = String(delta); deltaClass = 'kf-scenario-delta-down'; }
+                else                { deltaStr = '&#8212;'; deltaClass = 'kf-scenario-delta-neutral'; }
+                var safeName = p.name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                var tr = document.createElement('tr');
+                tr.innerHTML =
+                    '<td>' + (i + 1) + '</td>' +
+                    '<td>' + safeName + '</td>' +
+                    '<td><strong>' + p.projected + '</strong></td>' +
+                    '<td><span class="kf-scenario-delta ' + deltaClass + '">' + deltaStr + '</span></td>';
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('kf-scenario-standings').style.display = 'block';
+        };
+    })();
+    </script>
+    <?php endif; // end scenario simulator ?>
+
+    </div>
+
     <script>
     document.addEventListener('DOMContentLoaded', function() {
         // --- CSV Export Script ---

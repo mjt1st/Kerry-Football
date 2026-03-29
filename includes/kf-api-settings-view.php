@@ -53,6 +53,10 @@ function kf_api_settings_shortcode() {
         $auto_score = isset( $_POST['kf_auto_score_enabled'] ) ? '1' : '0';
         update_option( 'kf_auto_score_enabled', $auto_score );
 
+        // Save auto-pick favorites toggle
+        $auto_pick_favs = isset( $_POST['kf_enable_auto_pick_favorites'] ) ? '1' : '0';
+        update_option( 'kf_enable_auto_pick_favorites', $auto_pick_favs );
+
         $saved_message = '<div class="notice notice-success is-dismissible" style="margin-bottom:1em;"><p>Settings saved successfully!</p></div>';
     }
 
@@ -72,7 +76,8 @@ function kf_api_settings_shortcode() {
     $current_key       = get_option( 'kf_odds_api_key', '' );
     $current_bookmaker = get_option( 'kf_preferred_bookmaker', 'fanduel' );
     $current_sport     = get_option( 'kf_default_sport', 'nfl' );
-    $auto_score_on     = get_option( 'kf_auto_score_enabled', '1' ) === '1';
+    $auto_score_on        = get_option( 'kf_auto_score_enabled', '1' ) === '1';
+    $auto_pick_favs_on    = get_option( 'kf_enable_auto_pick_favorites', '1' ) === '1';
 
     // --- Usage stats ---
     $credits_used      = function_exists( 'kf_get_odds_credits_used' ) ? kf_get_odds_credits_used() : 0;
@@ -180,6 +185,14 @@ function kf_api_settings_shortcode() {
                         Enable Automatic Score Updates
                     </label>
                     <p class="kf-form-note">When enabled, scores are checked every 15 minutes for games added via the game browser. Results are auto-filled but the commissioner must still manually finalize each week.</p>
+                </div>
+
+                <div class="kf-form-group">
+                    <label style="font-weight:bold;cursor:pointer;">
+                        <input type="checkbox" name="kf_enable_auto_pick_favorites" value="1" <?php checked( $auto_pick_favs_on ); ?> style="transform:scale(1.2);margin-right:8px;">
+                        Enable &ldquo;Auto-fill Favorites&rdquo; Button for Players
+                    </label>
+                    <p class="kf-form-note">When enabled, a button appears on the picks form that fills in the spread favorite for each game. Players can review and change their picks. Point values are never auto-filled &mdash; players must assign those manually. Toss-up games (pick&rsquo;em / no spread) are skipped and flagged. Uncheck to hide this feature from all players.</p>
                 </div>
             </fieldset>
 

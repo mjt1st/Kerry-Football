@@ -344,4 +344,78 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Optional: You can override the default window.alert if you want to use this modal everywhere.
     // window.alert = showKFCustomAlert;
+
+    /**
+     * =================================================
+     * Live Deadline Countdown
+     * Scans for [data-deadline] elements and updates
+     * a .kf-deadline-countdown span inside them.
+     * =================================================
+     */
+    function initDeadlineCountdown() {
+        var deadlineEls = document.querySelectorAll('[data-deadline]');
+        if (!deadlineEls.length) return;
+
+        function updateCountdowns() {
+            var now = new Date();
+            deadlineEls.forEach(function(el) {
+                var dl = el.getAttribute('data-deadline');
+                if (!dl) return;
+                var target = new Date(dl);
+                var chip = el.querySelector('.kf-deadline-countdown');
+                if (!chip) return;
+
+                var diff = target - now;
+                if (diff <= 0) {
+                    chip.textContent = 'Deadline passed';
+                    chip.className = 'kf-deadline-countdown kf-countdown-critical';
+                    return;
+                }
+                var totalMin = Math.floor(diff / 60000);
+                var days  = Math.floor(totalMin / 1440);
+                var hours = Math.floor((totalMin % 1440) / 60);
+                var mins  = totalMin % 60;
+
+                var text = '';
+                if (days > 0)       text = days + 'd ' + hours + 'h remaining';
+                else if (hours > 0) text = hours + 'h ' + mins + 'm remaining';
+                else                text = mins + 'm remaining';
+
+                chip.textContent = text;
+                chip.className = 'kf-deadline-countdown' +
+                    (days === 0 && hours < 2 && hours > 0 ? ' kf-countdown-urgent' : '') +
+                    (days === 0 && hours === 0 ? ' kf-countdown-critical' : '');
+            });
+        }
+        updateCountdowns();
+        setInterval(updateCountdowns, 60000);
+    }
+    initDeadlineCountdown();
+
+    /**
+     * =================================================
+     * Finalize Week Guard
+     * Prevent finalizing if any result is still missing.
+     * The PHP renders data-results-complete="1|0" on the
+     * finalize form wrapper div.
+     * =================================================
+     */
+    const finalizeWrapper = document.getElementById('kf-finalize-wrapper');
+    if (finalizeWrapper) {
+        var complete = finalizeWrapper.getAttribute('data-results-complete');
+        if (complete !== '1') {
+            var finalizeBtn = finalizeWrapper.querySelector('button[name="action"]');
+            if (finalizeBtn) {
+                finalizeBtn.disabled = true;
+                finalizeBtn.title = 'Enter all game results before finalizing.';
+                finalizeBtn.style.opacity = '0.5';
+                finalizeBtn.style.cursor = 'not-allowed';
+                // Insert a small note next to the button
+                var note = document.createElement('span');
+                note.style.cssText = 'font-size:0.82em;color:#b45309;margin-left:10px;';
+                note.textContent = 'Enter all results first';
+                finalizeBtn.insertAdjacentElement('afterend', note);
+            }
+        }
+    }
 });

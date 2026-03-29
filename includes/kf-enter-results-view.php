@@ -69,6 +69,56 @@ function kf_enter_results_shortcode() {
         $week_id
     ));
 
+    // --- Live totals data: load all player picks for this week ---
+    $season_players_rows = $wpdb->get_results($wpdb->prepare(
+        "SELECT u.ID, u.display_name
+         FROM {$wpdb->prefix}users u
+         JOIN {$wpdb->prefix}season_players sp ON u.ID = sp.user_id
+         WHERE sp.season_id = %d AND sp.status = 'accepted'
+         ORDER BY u.display_name ASC",
+        $season_id
+    ));
+    $season_players_map = [];
+    foreach ($season_players_rows as $r) {
+        $season_players_map[$r->ID] = $r->display_name;
+    }
+
+    // Build picks lookup: [matchup_id][user_id] = {pick, point_value}
+    $all_picks_rows = $wpdb->get_results($wpdb->prepare(
+        "SELECT p.user_id, p.matchup_id, p.pick, p.point_value
+         FROM {$wpdb->prefix}picks p
+         JOIN {$wpdb->prefix}matchups m ON p.matchup_id = m.id
+         WHERE m.week_id = %d AND p.is_bpow = 0 AND m.is_tiebreaker = 0",
+        $week_id
+    ));
+    $picks_by_matchup = [];
+    foreach ($all_picks_rows as $r) {
+        $picks_by_matchup[(int)$r->matchup_id][(int)$r->user_id] = [
+            'pick' => $r->pick,
+            'pts'  => (int)$r->point_value,
+        ];
+    }
+
+    // Build JS-safe data structures
+    $js_players     = [];
+    foreach ($season_players_map as $uid => $name) {
+        $js_players[] = ['id' => (int)$uid, 'name' => $name];
+    }
+    $js_matchup_picks = [];
+    foreach ($picks_by_matchup as $mid => $player_picks) {
+        $js_matchup_picks[$mid] = $player_picks;
+    }
+    $js_matchups = [];
+    foreach ($matchups as $m) {
+        if ($m->is_tiebreaker) continue;
+        $js_matchups[] = [
+            'id'     => (int)$m->id,
+            'team_a' => $m->team_a,
+            'team_b' => $m->team_b,
+            'result' => $m->result,
+        ];
+    }
+
     $all_results_entered = true;
     foreach ($matchups as $m) {
         if ($m->result === null || $m->result === '') {
@@ -97,6 +147,20 @@ function kf_enter_results_shortcode() {
                 <button type=”button” id=”kf-refresh-scores-btn” class=”kf-button” onclick=”kfRefreshScores(<?php echo intval($week_id); ?>)”>&#128260; Refresh Scores Now</button>
             </div>
             <div id=”kf-refresh-status” style=”display:none;margin-top:8px;”></div>
+        <?php endif; ?>
+
+        <?php if (!empty($season_players_map)): ?>
+        <div class=”kf-live-totals-panel” id=”kf-live-totals-panel”>
+            <h3>&#128200; Live Running Totals <small style=”font-weight:400;font-size:0.82em;color:#555;”>(updates as you select results)</small></h3>
+            <div class=”kf-live-totals-grid” id=”kf-live-totals-grid”>
+                <?php foreach ($season_players_map as $uid => $name): ?>
+                    <div class=”kf-live-total-chip” id=”kf-chip-<?php echo esc_attr($uid); ?>”>
+                        <span class=”kf-live-total-chip-name”><?php echo esc_html($name); ?></span>
+                        <span class=”kf-live-total-chip-score” id=”kf-chip-score-<?php echo esc_attr($uid); ?>”>0</span>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
         <?php endif; ?>
 
         <form method=”POST” class=”kf-card kf-tracked-form” style=”margin-top: 1.5em;”>
@@ -209,6 +273,78 @@ function kf_enter_results_shortcode() {
             </div>
         </form>
     </div>
+
+    <?php if (!empty($season_players_map)): ?>
+    <script>
+    (function() {
+        var KF_PLAYERS   = <?php echo wp_json_encode($js_players); ?>;
+        var KF_MATCHUPS  = <?php echo wp_json_encode($js_matchups); ?>;
+        var KF_PICKS     = <?php echo wp_json_encode($js_matchup_picks); ?>;
+
+        function computeTotals(currentResults) {
+            var totals = {};
+            KF_PLAYERS.forEach(function(p) { totals[p.id] = 0; });
+
+            KF_MATCHUPS.forEach(function(m) {
+                var result = currentResults[m.id] !== undefined ? currentResults[m.id] : (m.result || '');
+                if (!result) return;
+                var isTie = (result.toLowerCase() === 'tie');
+                KF_PLAYERS.forEach(function(p) {
+                    var picks = KF_PICKS[m.id];
+                    if (!picks || !picks[p.id]) return;
+                    var pick = picks[p.id].pick;
+                    var pts  = picks[p.id].pts;
+                    if (isTie) {
+                        totals[p.id] += Math.floor(pts / 2);
+                    } else if (pick.toLowerCase() === result.toLowerCase()) {
+                        totals[p.id] += pts;
+                    }
+                });
+            });
+            return totals;
+        }
+
+        function updateDisplay(totals) {
+            var maxScore = Math.max.apply(null, Object.values(totals));
+            KF_PLAYERS.forEach(function(p) {
+                var chip = document.getElementById('kf-chip-' + p.id);
+                var scoreEl = document.getElementById('kf-chip-score-' + p.id);
+                if (!chip || !scoreEl) return;
+                scoreEl.textContent = totals[p.id] || 0;
+                if (totals[p.id] === maxScore && maxScore > 0) {
+                    chip.classList.add('kf-chip-leading');
+                } else {
+                    chip.classList.remove('kf-chip-leading');
+                }
+            });
+        }
+
+        function gatherCurrentSelections() {
+            var current = {};
+            KF_MATCHUPS.forEach(function(m) {
+                var sel = document.querySelector('select[name="results[' + m.id + ']"]');
+                if (sel) { current[m.id] = sel.value; }
+            });
+            return current;
+        }
+
+        function refresh() {
+            var selections = gatherCurrentSelections();
+            var totals = computeTotals(selections);
+            updateDisplay(totals);
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initial compute from existing DB values
+            refresh();
+            // Listen to all result selects
+            document.querySelectorAll('select[name^="results["]').forEach(function(sel) {
+                sel.addEventListener('change', refresh);
+            });
+        });
+    })();
+    </script>
+    <?php endif; ?>
 
     <?php if ($is_api_week): ?>
     <script>

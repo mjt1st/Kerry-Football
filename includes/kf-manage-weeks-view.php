@@ -72,6 +72,25 @@ function kf_manage_weeks_view_shortcode() {
 
     $all_weeks = $wpdb->get_results($wpdb->prepare("SELECT * FROM $weeks_table WHERE season_id = %d ORDER BY week_number ASC", $season_id));
 
+    // Per-week: count players who have submitted picks and total accepted players
+    $total_players = (int)$wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM {$wpdb->prefix}season_players WHERE season_id = %d AND status = 'accepted'",
+        $season_id
+    ));
+    $picks_per_week = [];
+    if (!empty($all_weeks)) {
+        $week_ids = wp_list_pluck($all_weeks, 'id');
+        $ph = implode(',', array_fill(0, count($week_ids), '%d'));
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT week_id, COUNT(DISTINCT user_id) AS cnt FROM {$wpdb->prefix}picks
+             WHERE week_id IN ($ph) AND is_bpow = 0 GROUP BY week_id",
+            $week_ids
+        ));
+        foreach ($rows as $r) {
+            $picks_per_week[(int)$r->week_id] = (int)$r->cnt;
+        }
+    }
+
     ob_start();
     ?>
     <div class="kf-container">
@@ -94,12 +113,19 @@ function kf_manage_weeks_view_shortcode() {
                 </thead>
                 <tbody>
                     <?php if (empty($all_weeks)): ?>
-                        <tr><td colspan="3">No weeks have been created for this season yet.</td></tr>
+                        <tr><td colspan="3">
+                            <div class="kf-empty-state">
+                                <div class="kf-empty-icon">🏈</div>
+                                <h3>No weeks yet</h3>
+                                <p>Get started by adding the first week of the season.</p>
+                                <a href="<?php echo esc_url(site_url('/week-setup/')); ?>" class="kf-button kf-button-action">+ Add First Week</a>
+                            </div>
+                        </td></tr>
                     <?php else: ?>
                         <?php foreach($all_weeks as $week): ?>
                             <tr>
                                 <td>
-                                    <?php 
+                                    <?php
                                     $week_summary_url = add_query_arg(['week_id' => $week->id], site_url('/week-summary/'));
                                     if ($week->status !== 'draft'): ?>
                                         <a href="<?php echo esc_url($week_summary_url); ?>">
@@ -107,6 +133,18 @@ function kf_manage_weeks_view_shortcode() {
                                         </a>
                                     <?php else: ?>
                                         <strong>Week <?php echo esc_html($week->week_number); ?></strong>
+                                    <?php endif; ?>
+                                    <?php if ($week->status === 'published' && $total_players > 0):
+                                        $submitted = $picks_per_week[(int)$week->id] ?? 0;
+                                        $pct = $total_players > 0 ? round(($submitted / $total_players) * 100) : 0;
+                                        $bar_class = $submitted === 0 ? 'kf-progress-none' : ($submitted < $total_players ? 'kf-progress-partial' : '');
+                                    ?>
+                                        <div class="kf-picks-progress">
+                                            <div class="kf-picks-progress-bar-wrap">
+                                                <div class="kf-picks-progress-bar <?php echo esc_attr($bar_class); ?>" style="width:<?php echo esc_attr($pct); ?>%"></div>
+                                            </div>
+                                            <?php echo intval($submitted); ?>/<?php echo intval($total_players); ?> picks
+                                        </div>
                                     <?php endif; ?>
                                 </td>
                                 <td class="kf-status-cell">

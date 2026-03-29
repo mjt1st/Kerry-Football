@@ -202,26 +202,42 @@ function kf_player_dashboard_view() {
             <?php if ($active_season->is_active == 0): ?>
                 <div class="kf-card"><h3 style="margin-top:0;">The season is complete!</h3></div>
             <?php elseif ($action_week): ?>
+                <?php
+                // --- TIMEZONE FIX ---
+                $deadline_formatted = 'N/A';
+                $deadline_iso        = '';
+                if ($action_week->submission_deadline) {
+                    try {
+                        $utc_dt  = new DateTime($action_week->submission_deadline, new DateTimeZone('UTC'));
+                        $site_tz = new DateTimeZone(wp_timezone_string());
+                        $site_dt = $utc_dt->setTimezone($site_tz);
+                        $deadline_formatted = $site_dt->format('l, M j @ g:i A T');
+                        $deadline_iso       = $site_dt->format('c'); // ISO 8601 for JS countdown
+                    } catch (Exception $e) {
+                        $deadline_formatted = date("l, M j @ g:i A T", strtotime($action_week->submission_deadline));
+                    }
+                }
+                $picks_url = esc_url(add_query_arg(['week_id' => $action_week->id], site_url('/my-picks/')));
+                ?>
+
+                <?php if (!$has_submitted_action_week && !$is_commissioner): ?>
+                    <div class="kf-unpicked-alert">
+                        <div class="kf-unpicked-alert-text">
+                            <strong>&#9888; You haven&rsquo;t picked Week <?php echo esc_html($action_week->week_number); ?> yet!</strong>
+                            <span>Deadline:
+                                <span data-deadline="<?php echo esc_attr($deadline_iso); ?>">
+                                    <?php echo esc_html($deadline_formatted); ?>
+                                    <span class="kf-deadline-countdown"></span>
+                                </span>
+                            </span>
+                        </div>
+                        <a href="<?php echo $picks_url; ?>" class="kf-button">Make My Picks &rarr;</a>
+                    </div>
+                <?php endif; ?>
+
                 <div class="kf-card kf-action-card">
                     <div class="kf-action-card-info">
                         <h3>Next Up: Week <?php echo esc_html($action_week->week_number); ?></h3>
-                        <?php
-                        // --- TIMEZONE FIX ---
-                        // Convert the UTC time from the DB to the site's local timezone for display.
-                        $deadline_formatted = 'N/A';
-                        if ($action_week->submission_deadline) {
-                            try {
-                                $utc_dt = new DateTime($action_week->submission_deadline, new DateTimeZone('UTC'));
-                                $site_tz = new DateTimeZone(wp_timezone_string());
-                                $site_dt = $utc_dt->setTimezone($site_tz);
-                                // A slightly different format for this card view
-                                $deadline_formatted = $site_dt->format('l, M j @ g:i A T');
-                            } catch (Exception $e) {
-                                // Fallback
-                                $deadline_formatted = date("l, M j @ g:i A T", strtotime($action_week->submission_deadline));
-                            }
-                        }
-                        ?>
                         <p><strong>Deadline:</strong> <?php echo esc_html($deadline_formatted); ?></p>
                         <div class="kf-action-card-status">
                             <?php if($has_submitted_action_week): ?>
@@ -232,7 +248,7 @@ function kf_player_dashboard_view() {
                         </div>
                     </div>
                     <div class="kf-action-card-button">
-                       <a href="<?php echo esc_url(add_query_arg(['week_id' => $action_week->id], site_url('/my-picks/'))); ?>" class="kf-button">Make / Edit Picks</a>
+                       <a href="<?php echo $picks_url; ?>" class="kf-button">Make / Edit Picks</a>
                     </div>
                 </div>
             <?php else: ?>

@@ -969,6 +969,63 @@
     }
 }
 
+/* --- Auto-fill Favorites Bar (Player Picks Form) --- */
+.kf-autofill-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding: 8px 12px;
+    background: #f0f7ff;
+    border: 1px solid #b8d9f7;
+    border-radius: 6px;
+    flex-wrap: wrap;
+}
+.kf-autofill-favorites-btn {
+    background: #0077cc;
+    color: #fff;
+    border: none;
+    padding: 7px 16px;
+    border-radius: 5px;
+    font-size: 0.92em;
+    font-weight: bold;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s;
+}
+.kf-autofill-favorites-btn:hover {
+    background: #005fa3;
+}
+.kf-autofill-note {
+    font-size: 0.83em;
+    color: #555;
+    font-style: italic;
+}
+
+/* --- Toss-up / Pick'em badge --- */
+.kf-tossup-badge {
+    display: inline-block;
+    font-size: 0.73em;
+    font-weight: bold;
+    color: #856404;
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 4px;
+    padding: 1px 6px;
+    margin-left: 6px;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+/* --- Duplicate point-value row highlight --- */
+.kf-table tr.kf-points-duplicate td {
+    background-color: #fff0f0 !important;
+}
+.kf-table tr.kf-points-duplicate .kf-point-select {
+    border: 2px solid #dc3545 !important;
+    box-shadow: 0 0 0 2px rgba(220,53,69,0.15);
+}
+
 /* --- Status Badges on Enter Results Page --- */
 .kf-status-badge {
     display: inline-block;
@@ -1428,3 +1485,229 @@
 @media (max-width: 640px) {
     .kf-api-info-grid { grid-template-columns: 1fr; }
 }
+
+
+/* ============================================================
+   BATCH UPDATE — UX & UI Improvements
+   ============================================================ */
+
+/* --- Sticky first column on all wide tables --- */
+.kf-table-wrapper { position: relative; }
+.kf-table th:first-child,
+.kf-table td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: inherit;
+    box-shadow: 2px 0 4px rgba(0,0,0,0.06);
+}
+.kf-table thead th:first-child {
+    z-index: 3;
+    background: var(--kf-primary-color);
+}
+.kf-table tfoot td:first-child,
+.kf-table tfoot th:first-child {
+    z-index: 3;
+    background: #fff;
+}
+.kf-table tr:nth-of-type(even) td:first-child { background: #f9f9f9; }
+.kf-table td.kf-win:first-child  { background: #d4edda; }
+.kf-table td.kf-loss:first-child { background: #f8d7da; }
+.kf-table td.kf-tie:first-child  { background: #e6f2ff; }
+
+/* --- Mobile card layout for player picks table --- */
+@media (max-width: 600px) {
+    .kf-picks-table-standard thead,
+    .kf-picks-table-bpow thead { display: none; }
+    .kf-picks-table-standard tbody tr,
+    .kf-picks-table-bpow tbody tr {
+        display: block;
+        border: 1px solid #dde3ea;
+        border-radius: 10px;
+        margin-bottom: 12px;
+        padding: 10px 14px;
+        background: #fff;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    .kf-picks-table-standard tbody td,
+    .kf-picks-table-bpow tbody td { display: block; border: none; padding: 4px 0; }
+    .kf-picks-table-standard tbody td:first-child,
+    .kf-picks-table-bpow tbody td:first-child {
+        font-weight: 600;
+        font-size: 1em;
+        padding-bottom: 6px;
+        border-bottom: 1px solid #f0f0f0;
+        margin-bottom: 4px;
+    }
+    .kf-pick-select, .kf-point-select,
+    .kf-table input[type="number"], .kf-table input[type="text"],
+    .kf-table select { font-size: 16px !important; min-height: 44px; }
+    .kf-picks-table-standard th:first-child, .kf-picks-table-standard td:first-child,
+    .kf-picks-table-bpow th:first-child, .kf-picks-table-bpow td:first-child {
+        position: static; box-shadow: none;
+    }
+    .kf-week-nav { display: flex; gap: 8px; }
+    .kf-week-nav .kf-button { flex: 1; text-align: center; padding: 14px 10px; font-size: 1em; }
+    .kf-mode-toggle-btn { padding: 14px 10px; font-size: 0.95em; }
+}
+
+/* --- iOS: 16px font on all inputs to prevent auto-zoom --- */
+@media (max-width: 768px) {
+    select, input[type="text"], input[type="number"],
+    input[type="datetime-local"], textarea { font-size: 16px !important; }
+}
+
+/* --- Sticky "Save Picks" bottom bar --- */
+.kf-sticky-save-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 100;
+    background: #fff;
+    border-top: 2px solid var(--kf-primary-color);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.12);
+    gap: 12px;
+}
+.kf-sticky-save-bar .kf-sticky-save-label { font-size: 0.9em; color: #555; flex: 1; }
+.kf-sticky-save-bar .kf-button { white-space: nowrap; flex-shrink: 0; }
+.kf-picks-container { padding-bottom: 80px; }
+
+/* --- Deadline countdown chip --- */
+.kf-deadline-countdown {
+    display: inline-block;
+    font-size: 0.88em;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 99px;
+    background: #e3f2fd;
+    color: var(--kf-primary-color);
+    border: 1px solid #bbdefb;
+    margin-left: 8px;
+    transition: background 0.3s, color 0.3s;
+}
+.kf-deadline-countdown.kf-countdown-urgent { background: #fff3cd; color: #856404; border-color: #ffc107; }
+.kf-deadline-countdown.kf-countdown-critical {
+    background: #f8d7da; color: #721c24; border-color: #f5c6cb;
+    animation: kf-pulse 1s infinite;
+}
+
+/* --- "Haven't picked yet" alert banner --- */
+.kf-unpicked-alert {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    background: #fff3cd;
+    border: 2px solid #ffc107;
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-bottom: 1.5em;
+    flex-wrap: wrap;
+}
+.kf-unpicked-alert-text strong { display: block; font-size: 1.1em; color: #856404; margin-bottom: 4px; }
+.kf-unpicked-alert-text span { font-size: 0.9em; color: #6d5308; }
+.kf-unpicked-alert .kf-button { background: #e6a200; color: #fff; white-space: nowrap; }
+.kf-unpicked-alert .kf-button:hover { background: #c98b00; }
+
+/* --- Per-week picks progress badge (Manage Weeks) --- */
+.kf-picks-progress {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 0.82em; color: #555; margin-top: 4px;
+}
+.kf-picks-progress-bar-wrap {
+    width: 60px; height: 6px; background: #e0e0e0; border-radius: 3px; overflow: hidden; flex-shrink: 0;
+}
+.kf-picks-progress-bar { height: 100%; background: var(--kf-success-color); border-radius: 3px; transition: width 0.3s; }
+.kf-picks-progress-bar.kf-progress-partial { background: #ffc107; }
+.kf-picks-progress-bar.kf-progress-none { background: #e0e0e0; }
+
+/* --- Live running totals panel (Enter Results) --- */
+.kf-live-totals-panel {
+    background: #f0f7ff;
+    border: 1px solid #b8d9f7;
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-bottom: 1.5em;
+}
+.kf-live-totals-panel h3 { margin: 0 0 10px 0; font-size: 1em; color: var(--kf-primary-color); border: none; }
+.kf-live-totals-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+.kf-live-total-chip {
+    background: #fff; border: 1px solid #cce0f5; border-radius: 20px;
+    padding: 5px 14px; font-size: 0.88em;
+    display: flex; align-items: center; gap: 6px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.kf-live-total-chip.kf-chip-leading {
+    border-color: #28a745; box-shadow: 0 0 0 2px rgba(40,167,69,0.15); font-weight: 700;
+}
+.kf-live-total-chip-name { color: #374151; }
+.kf-live-total-chip-score { font-weight: 700; color: var(--kf-primary-color); min-width: 28px; text-align: right; }
+
+/* --- Scenario Simulator (Week Summary) --- */
+.kf-scenario-panel {
+    border: 2px solid #d1b3ff; border-radius: 10px; background: #f8f4ff; margin: 1.5em 0;
+}
+.kf-scenario-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px; cursor: pointer; border-radius: 8px; user-select: none; gap: 12px;
+}
+.kf-scenario-header:hover { background: #f0e8ff; }
+.kf-scenario-header h3 { margin: 0; font-size: 1.05em; color: #5b21b6; border: none; }
+.kf-scenario-header .kf-scenario-toggle-hint { font-size: 0.82em; color: #7c3aed; flex-shrink: 0; }
+.kf-scenario-body { padding: 0 20px 20px 20px; display: none; }
+.kf-scenario-body.kf-scenario-open { display: block; }
+.kf-scenario-games { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.kf-scenario-game-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.kf-scenario-game-label { flex: 1; min-width: 160px; font-size: 0.92em; color: #374151; }
+.kf-scenario-select {
+    min-width: 180px; padding: 6px 10px; border: 1px solid #c4b5fd;
+    border-radius: 6px; background: #fff; font-size: 0.9em; color: #374151; cursor: pointer;
+}
+.kf-scenario-results-title { font-weight: 700; font-size: 0.95em; color: #5b21b6; margin-bottom: 8px; }
+.kf-scenario-standings { display: flex; flex-direction: column; gap: 6px; }
+.kf-scenario-player-row {
+    display: flex; align-items: center; gap: 10px; padding: 7px 12px;
+    background: #fff; border: 1px solid #ddd6fe; border-radius: 6px;
+    font-size: 0.88em; transition: background 0.15s;
+}
+.kf-scenario-player-row.kf-scenario-leader { background: #f0fdf4; border-color: #86efac; font-weight: 700; }
+.kf-scenario-rank { min-width: 22px; color: #9ca3af; font-size: 0.85em; }
+.kf-scenario-name { flex: 1; color: #111; }
+.kf-scenario-score { font-weight: 700; color: var(--kf-primary-color); min-width: 32px; text-align: right; }
+.kf-scenario-delta { font-size: 0.82em; padding: 1px 6px; border-radius: 8px; min-width: 38px; text-align: center; }
+.kf-scenario-delta.kf-delta-up { background: #dcfce7; color: #166534; }
+.kf-scenario-delta.kf-delta-down { background: #fee2e2; color: #991b1b; }
+.kf-scenario-delta.kf-delta-same { background: #f3f4f6; color: #6b7280; }
+.kf-scenario-note { font-size: 0.8em; color: #7c3aed; margin-top: 10px; font-style: italic; }
+.kf-scenario-reset-btn {
+    background: none; border: 1px solid #c4b5fd; color: #5b21b6;
+    border-radius: 5px; padding: 5px 14px; cursor: pointer; font-size: 0.85em;
+}
+.kf-scenario-reset-btn:hover { background: #ede9fe; }
+
+/* --- Game browser search input --- */
+.kf-game-search-wrap { flex: 1; min-width: 160px; max-width: 260px; position: relative; }
+.kf-game-search-wrap::before {
+    content: "🔍"; position: absolute; left: 9px; top: 50%;
+    transform: translateY(-50%); font-size: 0.85em; pointer-events: none;
+}
+.kf-game-search {
+    width: 100%; padding: 6px 10px 6px 30px;
+    border: 1px solid var(--kf-border-color); border-radius: 4px; font-size: 0.9em;
+}
+.kf-game-search:focus { outline: none; border-color: var(--kf-secondary-color); box-shadow: 0 0 0 2px rgba(21,101,192,0.15); }
+.kf-game-no-results { text-align: center; padding: 24px 12px; color: #9ca3af; font-style: italic; font-size: 0.9em; }
+
+/* --- Align autofill button with site palette --- */
+.kf-autofill-favorites-btn { background: var(--kf-primary-color) !important; color: #fff !important; }
+.kf-autofill-favorites-btn:hover { background: var(--kf-secondary-color) !important; }
+.kf-autofill-bar { background: #e8f0fe; border: 1px solid #b8cef9; }
+
+/* --- No-weeks empty state --- */
+.kf-empty-state { text-align: center; padding: 40px 20px; color: #6b7280; }
+.kf-empty-state .kf-empty-icon { font-size: 3em; margin-bottom: 12px; }
+.kf-empty-state h3 { color: #374151; border: none; margin-top: 0; }
+.kf-empty-state p { margin: 8px 0 20px; }

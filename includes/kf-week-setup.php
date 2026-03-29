@@ -380,7 +380,7 @@ function kf_week_setup_form() {
                         </select>
                     </div>
 
-                    <!-- College Conference filter (server-side) -->
+                    <!-- College Conference filter (client-side — full FBS list fetched once) -->
                     <div class="kf-form-group" id="kf-conference-group" style="margin-bottom:0;display:<?php echo $conf_display; ?>;">
                         <label for="kf-conference-filter">Conference</label>
                         <select id="kf-conference-filter">
@@ -429,6 +429,10 @@ function kf_week_setup_form() {
                                 <option value="big">Big spreads (10+)</option>
                                 <option value="has-odds">Has odds data</option>
                             </select>
+                        </div>
+                        <div class="kf-sort-filter-group kf-game-search-wrap">
+                            <label for="kf-game-search">Search</label>
+                            <input type="text" id="kf-game-search" class="kf-game-search" placeholder="Team name&hellip;" autocomplete="off">
                         </div>
                         <div id="kf-game-stats" class="kf-game-stats"></div>
                         <div class="kf-selection-counter-top">

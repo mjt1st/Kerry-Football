@@ -142,9 +142,22 @@ function _kf_display_picks_form(
 
     // Scope wrapper helps JS isolate sections
     $scope = $is_bpow_form ? 'bpow' : 'standard';
+
+    // --- Auto-fill favorites feature ---
+    $auto_pick_favs_enabled = get_option( 'kf_enable_auto_pick_favorites', '1' ) === '1';
+    $show_auto_fill_btn = $auto_pick_favs_enabled && !$is_bpow_form && !$deadline_passed;
+
     echo '<div class="kf-form-section" data-scope="'. esc_attr($scope) .'">';
 
-    ?>
+    // Render auto-fill button above table
+    if ($show_auto_fill_btn): ?>
+        <div class="kf-autofill-bar">
+            <button type="button" class="kf-button kf-autofill-favorites-btn" title="Fills in the spread favorite for each game. You can change any pick afterwards. Point values are not changed.">
+                ⭐ Auto-fill Favorites
+            </button>
+            <span class="kf-autofill-note">Fills in spread favorites only &mdash; you still choose your point values.</span>
+        </div>
+    <?php endif; ?>
     <table class="kf-table kf-picks-table-<?php echo esc_attr($scope); ?>">
         <thead><tr><th>Matchup</th><th>Pick</th><th>Point Value</th></tr></thead>
         <tbody>
@@ -152,10 +165,29 @@ function _kf_display_picks_form(
             $saved_pick     = $existing_picks[$matchup->id] ?? null;
             $selected_point = (int)($saved_pick['point_value'] ?? 0);
             $has_odds       = !empty($matchup->spread_home) || !empty($matchup->moneyline_home) || !empty($matchup->over_under);
+
+            // Determine favorite for auto-fill data attributes
+            $spread_h = ($matchup->spread_home !== null) ? floatval($matchup->spread_home) : null;
+            if ($spread_h === null) {
+                $is_tossup  = true;
+                $fav_team   = '';
+            } elseif ($spread_h < 0) {
+                $is_tossup  = false;
+                $fav_team   = $matchup->team_a; // home team is fav
+            } elseif ($spread_h > 0) {
+                $is_tossup  = false;
+                $fav_team   = $matchup->team_b; // away team is fav
+            } else {
+                $is_tossup  = true;   // PK / pick'em
+                $fav_team   = '';
+            }
             ?>
-            <tr>
+            <tr data-favorite="<?php echo esc_attr($fav_team); ?>" data-is-tossup="<?php echo $is_tossup ? '1' : '0'; ?>">
                 <td>
                     <?php echo esc_html($matchup->team_b . ' @ ' . $matchup->team_a); ?>
+                    <?php if ($is_tossup && $auto_pick_favs_enabled): ?>
+                        <span class="kf-tossup-badge" title="No spread available &mdash; this is a pick&rsquo;em. Auto-fill will skip this game.">&#10067; Pick&rsquo;em</span>
+                    <?php endif; ?>
                     <?php // SPORTS API V1: Show odds below matchup name if available ?>
                     <?php if ($has_odds): ?>
                         <div class="kf-odds-line">
@@ -645,17 +677,24 @@ function kf_my_picks_shortcode() {
         <?php
         if ($current_week->status !== 'finalized') {
             $deadline_formatted = 'Not set';
+            $deadline_iso       = '';
             if ($current_week->submission_deadline) {
                 try {
-                    $utc_dt = new DateTime($current_week->submission_deadline, new DateTimeZone('UTC'));
+                    $utc_dt  = new DateTime($current_week->submission_deadline, new DateTimeZone('UTC'));
                     $site_tz = new DateTimeZone(wp_timezone_string());
                     $site_dt = $utc_dt->setTimezone($site_tz);
-                    $deadline_formatted = $site_dt->format('l, F jS \a\\t g:i A T');
+                    $deadline_formatted = $site_dt->format('l, F jS \a\t g:i A T');
+                    $deadline_iso       = $site_dt->format('c');
                 } catch (Exception $e) {
-                    $deadline_formatted = date("l, F jS \a\\t g:i A T", strtotime($current_week->submission_deadline));
+                    $deadline_formatted = date("l, F jS \a\t g:i A T", strtotime($current_week->submission_deadline));
                 }
             }
-            echo '<p style="text-align:center;font-size:1.1em;margin-top:-1em;margin-bottom:2em;"><strong>Submission Deadline:</strong> ' . esc_html($deadline_formatted) . '</p>';
+            echo '<p style="text-align:center;font-size:1.1em;margin-top:-1em;margin-bottom:2em;">'
+               . '<strong>Submission Deadline:</strong> '
+               . '<span data-deadline="' . esc_attr($deadline_iso) . '">'
+               . esc_html($deadline_formatted)
+               . ' <span class="kf-deadline-countdown"></span>'
+               . '</span></p>';
         }
         ?>
 
@@ -717,6 +756,11 @@ function kf_my_picks_shortcode() {
                     <div class="kf-picks-actions">
                         <button type="submit" name="kf_submit_picks" class="kf-button kf-button-action">Save All Picks</button>
                     </div>
+                    <!-- Sticky save bar: always visible while scrolling -->
+                    <div class="kf-sticky-save-bar">
+                        <span class="kf-sticky-save-label">Week <?php echo esc_html($current_week->week_number); ?> Picks</span>
+                        <button type="submit" name="kf_submit_picks" class="kf-button kf-button-action">&#10003; Save All Picks</button>
+                    </div>
                 </form>
             </div>
         <?php } ?>
@@ -728,21 +772,45 @@ function kf_my_picks_shortcode() {
     $script = <<<'JS'
 <script>
 (function(){
+  /* --- Helpers --- */
   function n(v){ if(v===''||v==null){return null;} var x=parseInt(v,10); return isNaN(x)?null:x; }
+
+  /* --- Point pool: disable used values + highlight duplicates --- */
   function initSection(section){
     if(!section || section.dataset.jsInitialized==='true'){ return; }
     var selects = section.querySelectorAll('.kf-point-select');
+
     function update(){
-      var chosen = new Set(Array.from(selects).map(function(s){return n(s.value);}).filter(function(v){return v!==null;}));
+      // Count how many times each value is selected
+      var counts = {};
+      selects.forEach(function(sel){
+        var v = n(sel.value);
+        if(v !== null){ counts[v] = (counts[v] || 0) + 1; }
+      });
+
       selects.forEach(function(sel){
         var cur = n(sel.value);
+        var isDup = (cur !== null && (counts[cur] || 0) > 1);
+        var row = sel.closest('tr');
+
+        // Highlight duplicate rows in red
+        if(row){
+          if(isDup){
+            row.classList.add('kf-points-duplicate');
+          } else {
+            row.classList.remove('kf-points-duplicate');
+          }
+        }
+
+        // Disable already-used options in every other select
         sel.querySelectorAll('option').forEach(function(opt){
           var ov = n(opt.value);
           if(ov===null){ opt.disabled=false; return; }
-          opt.disabled = (chosen.has(ov) && ov !== cur);
+          opt.disabled = (counts[ov] > 0 && ov !== cur);
         });
       });
     }
+
     selects.forEach(function(sel){
       sel.addEventListener('change', update);
       sel.addEventListener('input', update);
@@ -750,7 +818,71 @@ function kf_my_picks_shortcode() {
     update();
     section.dataset.jsInitialized='true';
   }
-  function boot(){ document.querySelectorAll('.kf-form-section').forEach(initSection); }
+
+  /* --- Form submit guard: block if any duplicate point values exist --- */
+  function initSubmitGuard(form){
+    if(!form || form.dataset.submitGuardInit==='true'){ return; }
+    form.addEventListener('submit', function(e){
+      var hasDups = false;
+      form.querySelectorAll('.kf-form-section').forEach(function(section){
+        var selects = section.querySelectorAll('.kf-point-select');
+        var counts = {};
+        selects.forEach(function(sel){
+          var v = n(sel.value);
+          if(v !== null){ counts[v] = (counts[v] || 0) + 1; }
+        });
+        for(var k in counts){ if(counts[k] > 1){ hasDups = true; } }
+      });
+      if(hasDups){
+        e.preventDefault();
+        alert('You have duplicate point values. Each point value can only be used once per game. Please fix the highlighted rows before saving.');
+      }
+    });
+    form.dataset.submitGuardInit='true';
+  }
+
+  /* --- Auto-fill favorites --- */
+  function initAutoFill(){
+    document.querySelectorAll('.kf-autofill-favorites-btn').forEach(function(btn){
+      if(btn.dataset.autofillInit==='true'){ return; }
+      btn.addEventListener('click', function(){
+        var section = btn.closest('.kf-form-section');
+        if(!section){ return; }
+        var rows = section.querySelectorAll('table tbody tr[data-favorite]');
+        var tossups = 0;
+        rows.forEach(function(row){
+          var fav    = row.getAttribute('data-favorite') || '';
+          var isToss = row.getAttribute('data-is-tossup') === '1';
+          if(isToss || fav === ''){ tossups++; return; }
+          var pickSel = row.querySelector('.kf-pick-select');
+          if(!pickSel){ return; }
+          // Find the option matching the favorite team name
+          var opts = pickSel.querySelectorAll('option');
+          for(var i=0;i<opts.length;i++){
+            if(opts[i].value === fav){
+              pickSel.value = fav;
+              pickSel.dispatchEvent(new Event('change'));
+              break;
+            }
+          }
+        });
+        if(tossups > 0){
+          var msg = tossups === 1
+            ? '1 game has no spread (pick\u2019em) and was skipped \u2014 please pick that one manually.'
+            : tossups + ' games have no spread (pick\u2019em) and were skipped \u2014 please pick those manually.';
+          alert(msg);
+        }
+      });
+      btn.dataset.autofillInit='true';
+    });
+  }
+
+  /* --- Boot --- */
+  function boot(){
+    document.querySelectorAll('.kf-form-section').forEach(initSection);
+    document.querySelectorAll('form.kf-tracked-form').forEach(initSubmitGuard);
+    initAutoFill();
+  }
   if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', boot); } else { boot(); }
   var mo = new MutationObserver(function(){ boot(); });
   mo.observe(document.body, {childList:true, subtree:true});

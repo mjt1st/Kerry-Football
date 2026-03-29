@@ -241,27 +241,11 @@ function kf_ajax_fetch_games() {
         }
     }
 
-    // College football conference filter
-    if ($sport === 'college-football' && !empty($_POST['conference'])) {
-        // ESPN uses group IDs for conferences
-        $conf_map = [
-            'fbs'            => 80, // All FBS (D-I) — most useful default for pick'em leagues
-            'sec'            => 8,
-            'big-ten'        => 5,
-            'big-12'         => 4,
-            'acc'            => 1,
-            'pac-12'         => 9,
-            'aac'            => 151,
-            'mountain-west'  => 17,
-            'sun-belt'       => 37,
-            'mac'            => 15,
-            'cusa'           => 12,
-            'ind'            => 9,  // Independents (Notre Dame, etc.)
-        ];
-        $conf = sanitize_text_field($_POST['conference']);
-        if (isset($conf_map[$conf])) {
-            $params['groups'] = $conf_map[$conf];
-        }
+    // College football: always fetch ALL FBS games in one request (groups=80).
+    // Conference filtering is done client-side using the conferenceId returned per game,
+    // so a single ESPN call covers every conference — no duplicate fetches needed.
+    if ($sport === 'college-football') {
+        $params['groups'] = 80; // All FBS (D-I) — one cached fetch, filtered client-side
     }
 
     $games = kf_espn_fetch_scoreboard($sport, $params);
