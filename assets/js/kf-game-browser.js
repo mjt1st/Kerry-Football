@@ -358,7 +358,7 @@
             }
 
             // Spread badge label
-            var spreadLabel = '—';
+            var spreadLabel = 'No odds';
             if (game.spread_details && game.spread_details !== '') {
                 spreadLabel = game.spread_details;
             } else if (sh !== null) {

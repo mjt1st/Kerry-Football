@@ -258,6 +258,11 @@ function kf_week_setup_form() {
 
             <div id="kf-game-browser" style="display:none;margin-top:1.5em;" class="kf-card">
                 <h3 style="margin-top:0;">Browse Games</h3>
+                <p class="kf-form-note" style="margin-bottom:1em;">
+                    &#128203; Odds (spread, O/U, moneyline) are pulled from ESPN at fetch time and shown on the picks form.
+                    <strong>Odds only appear for upcoming games</strong> &mdash; ESPN does not include betting lines for past or completed games.
+                    Off-season testing will show games without odds; during the season odds will populate automatically.
+                </p>
 
                 <?php
                 // Determine display names and initial filter visibility
