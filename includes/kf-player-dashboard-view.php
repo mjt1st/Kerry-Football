@@ -33,13 +33,16 @@ function kf_player_dashboard_view() {
         $invite_season_id = intval( $_POST['invite_season_id'] ?? 0 );
         $response         = sanitize_key( $_POST['kf_invite_response'] );
         if ( $invite_season_id > 0 && in_array( $response, [ 'accepted', 'declined' ], true ) ) {
-            $wpdb->update(
+            // Security: WHERE clause includes status='invited' so only a real pending invitation
+            // can be updated. Capture rows_affected so session is only set when the update
+            // actually matched a row — prevents a user POSTing an arbitrary season_id.
+            $updated = $wpdb->update(
                 $wpdb->prefix . 'season_players',
                 [ 'status' => $response ],
                 [ 'user_id' => $user_id, 'season_id' => $invite_season_id, 'status' => 'invited' ]
             );
-            // If accepted, make this the active season
-            if ( $response === 'accepted' ) {
+            // Only act on acceptance if a real invitation row was changed
+            if ( $response === 'accepted' && $updated ) {
                 $_SESSION['kf_active_season_id'] = $invite_season_id;
                 $season_id = $invite_season_id;
                 delete_transient( 'kf_default_season_' . $user_id );

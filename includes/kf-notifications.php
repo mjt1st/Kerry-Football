@@ -80,13 +80,18 @@ function kf_send_email_to_eligible_players($season_id, $notification_type, $subj
     }
 
     $headers = ['Content-Type: text/html; charset=UTF-8'];
-    $from_email = get_option('admin_email');
-    $from_name = get_bloginfo('name');
-    $headers[] = "From: $from_name <$from_email>";
+    // Security: sanitize From header values to prevent email header injection.
+    // get_bloginfo/get_option are trusted sources but could contain special chars.
+    $from_email = sanitize_email( get_option( 'admin_email' ) );
+    $from_name  = sanitize_text_field( get_bloginfo( 'name' ) );
+    $headers[]  = 'From: ' . $from_name . ' <' . $from_email . '>';
 
     // Send emails individually to protect player privacy (no shared To: field)
     foreach ($recipients as $recipient_email) {
-        wp_mail($recipient_email, $subject, $message, $headers);
+        $sent = wp_mail( sanitize_email( $recipient_email ), $subject, $message, $headers );
+        if ( ! $sent ) {
+            error_log( "Kerry Football: Failed to send '{$notification_type}' notification to {$recipient_email} (season {$season_id})" );
+        }
     }
 }
 

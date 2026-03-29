@@ -184,8 +184,20 @@ function kf_save_player_order_ajax_handler() {
     global $wpdb;
     $player_order_table = $wpdb->prefix . 'season_player_order';
 
+    // Security: only update user IDs that are accepted members of this season.
+    // Prevents a malicious payload from writing arbitrary user_id/season combinations.
+    $valid_user_ids = $wpdb->get_col( $wpdb->prepare(
+        "SELECT user_id FROM {$wpdb->prefix}season_players WHERE season_id = %d AND status = 'accepted'",
+        $season_id
+    ) );
+    $valid_user_ids = array_map( 'intval', $valid_user_ids );
+
     foreach ($player_order_ids as $index => $user_id) {
-        $wpdb->update($player_order_table, ['display_order' => $index], ['season_id' => $season_id, 'user_id' => intval($user_id)]);
+        $uid = intval($user_id);
+        if ( ! in_array( $uid, $valid_user_ids, true ) ) {
+            continue; // Skip any IDs not belonging to this season
+        }
+        $wpdb->update($player_order_table, ['display_order' => $index], ['season_id' => $season_id, 'user_id' => $uid]);
     }
 
     wp_send_json_success(['message' => 'Player order saved.']);

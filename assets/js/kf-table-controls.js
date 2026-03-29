@@ -269,7 +269,10 @@ document.addEventListener('DOMContentLoaded', function() {
             }, { offset: Number.NEGATIVE_INFINITY }).element;
         }
 
+        let isSavingOrder = false; // Guard against double-submit
         saveButton.addEventListener('click', () => {
+            if (isSavingOrder) return;
+            isSavingOrder = true;
             saveButton.style.display = 'none';
             statusSpinner.style.display = 'inline-block';
 
@@ -291,6 +294,7 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .then(response => response.json())
             .then(data => {
+                isSavingOrder = false;
                 if (data.success) {
                     statusSpinner.textContent = 'Order Saved!';
                     setTimeout(() => {
@@ -302,6 +306,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     statusSpinner.style.display = 'none';
                     saveButton.style.display = 'inline-block';
                 }
+            })
+            .catch(() => {
+                isSavingOrder = false;
+                statusSpinner.style.display = 'none';
+                saveButton.style.display = 'inline-block';
+                showKFCustomAlert('Network error saving order. Please try again.');
             });
         });
     }

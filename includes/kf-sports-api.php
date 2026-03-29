@@ -71,6 +71,7 @@ function kf_espn_fetch_scoreboard( $sport = 'nfl', $params = [] ) {
 
     $code = wp_remote_retrieve_response_code( $response );
     if ( $code !== 200 ) {
+        error_log( 'Kerry Football: ESPN API returned HTTP ' . $code . ' for URL: ' . $url );
         return new WP_Error( 'espn_api_error', "ESPN API returned status {$code}" );
     }
 
@@ -433,7 +434,7 @@ function kf_odds_api_fetch_odds( $sport = 'nfl' ) {
     $bookmaker = get_option( 'kf_preferred_bookmaker', 'fanduel' );
 
     $url = add_query_arg( [
-        'apiKey'       => $api_key,
+        'apiKey'       => sanitize_text_field( $api_key ),
         'regions'      => 'us',
         'markets'      => 'h2h,spreads,totals',
         'oddsFormat'   => 'american',
@@ -648,7 +649,7 @@ function kf_odds_api_fetch_scores( $sport = 'nfl' ) {
 
     $sport_key = $sport === 'nfl' ? 'americanfootball_nfl' : 'americanfootball_ncaaf';
     $url       = add_query_arg( [
-        'apiKey'   => $api_key,
+        'apiKey'   => sanitize_text_field( $api_key ),
         'daysFrom' => 3,
     ], "https://api.the-odds-api.com/v4/sports/{$sport_key}/scores/" );
 
@@ -700,7 +701,7 @@ function kf_test_odds_api_connection() {
         return [ 'success' => false, 'message' => 'No API key configured.' ];
     }
 
-    $url      = add_query_arg( [ 'apiKey' => $api_key ], 'https://api.the-odds-api.com/v4/sports/' );
+    $url      = add_query_arg( [ 'apiKey' => sanitize_text_field( $api_key ) ], 'https://api.the-odds-api.com/v4/sports/' );
     $response = wp_remote_get( $url, [ 'timeout' => 10 ] );
 
     if ( is_wp_error( $response ) ) {
