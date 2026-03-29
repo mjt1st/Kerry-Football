@@ -1646,6 +1646,31 @@
 .kf-live-total-chip-name { color: #374151; }
 .kf-live-total-chip-score { font-weight: 700; color: var(--kf-primary-color); min-width: 28px; text-align: right; }
 
+/* --- Live Game Indicators (Week Summary) --- */
+.kf-row-live { background: #fffbeb !important; }
+.kf-row-live:hover { background: #fef3c7 !important; }
+.kf-live-badge {
+    display: inline-block; background: #ef4444; color: #fff;
+    font-size: 0.68em; font-weight: 700; letter-spacing: 0.06em;
+    padding: 2px 7px; border-radius: 99px; vertical-align: middle; margin-right: 5px;
+    animation: kf-live-pulse 1.4s ease-in-out infinite;
+}
+@keyframes kf-live-pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.55; }
+}
+.kf-live-score-display { font-size: 0.88em; color: #1d4ed8; font-weight: 600; white-space: nowrap; }
+.kf-live-combined { font-size: 0.82em; font-weight: 400; color: #6b7280; margin-left: 6px; }
+.kf-final-score-inline { color: #9ca3af; font-size: 0.82em; font-weight: 400; margin-left: 4px; }
+.kf-kickoff-time { color: #9ca3af; font-size: 0.85em; font-style: italic; }
+.kf-winner-cell { min-width: 120px; white-space: nowrap; }
+.kf-pick-live-winning,
+.kf-pick-live-winning.kf-points-cell { background: #d1fae5 !important; color: #065f46 !important; }
+.kf-pick-live-losing,
+.kf-pick-live-losing.kf-points-cell  { background: #fee2e2 !important; color: #991b1b !important; }
+.kf-pick-live-tied,
+.kf-pick-live-tied.kf-points-cell    { background: #e0f2fe !important; color: #075985 !important; }
+
 /* --- Scenario Simulator (Week Summary) --- */
 .kf-scenario-panel {
     border: 2px solid #d1b3ff; border-radius: 10px; background: #f8f4ff; margin: 1.5em 0;

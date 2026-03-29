@@ -478,14 +478,54 @@ function kf_week_summary_view() {
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($regular_matchups as $matchup): ?>
-                                <tr>
+                            <?php foreach ($regular_matchups as $matchup):
+                                // --- Live game data ---
+                                $m_status   = $matchup->game_status ?? null;
+                                $m_hs       = $matchup->home_score !== null ? (int)$matchup->home_score : null;
+                                $m_as       = $matchup->away_score !== null ? (int)$matchup->away_score : null;
+                                $m_is_live  = ($m_status === 'in_progress');
+                                $m_has_scores = ($m_hs !== null && $m_as !== null);
+                                // Which team is currently winning? (null = tied or no scores yet)
+                                $current_leader = null;
+                                if ($m_is_live && $m_has_scores) {
+                                    if ($m_hs > $m_as) $current_leader = $matchup->team_a;
+                                    elseif ($m_as > $m_hs) $current_leader = $matchup->team_b;
+                                }
+                            ?>
+                                <tr class="<?php echo $m_is_live ? 'kf-row-live' : ''; ?>">
                                     <td><?php echo esc_html($matchup->team_b . ' @ ' . $matchup->team_a); ?></td>
-                                    <td><?php echo esc_html($matchup->result); ?></td>
+                                    <td class="kf-winner-cell">
+                                        <?php
+                                        if ($matchup->result !== null && $matchup->result !== '') {
+                                            // Result set (auto-filled or manual)
+                                            echo esc_html($matchup->result);
+                                            if ($m_has_scores) {
+                                                echo ' <small class="kf-final-score-inline">(' . $m_as . '&ndash;' . $m_hs . ')</small>';
+                                            }
+                                        } elseif ($m_is_live && $m_has_scores) {
+                                            echo '<span class="kf-live-badge">LIVE</span>';
+                                            echo '<span class="kf-live-score-display">';
+                                            echo esc_html($matchup->team_b) . ' <strong>' . $m_as . '</strong>';
+                                            echo ' &ndash; ';
+                                            echo '<strong>' . $m_hs . '</strong> ' . esc_html($matchup->team_a);
+                                            echo '</span>';
+                                        } elseif ($m_is_live) {
+                                            echo '<span class="kf-live-badge">LIVE</span>';
+                                        } elseif ($m_status === 'scheduled' && !empty($matchup->game_datetime)) {
+                                            try {
+                                                $utc_dt = new DateTime($matchup->game_datetime, new DateTimeZone('UTC'));
+                                                $utc_dt->setTimezone(new DateTimeZone(wp_timezone_string()));
+                                                echo '<span class="kf-kickoff-time">' . esc_html($utc_dt->format('D g:i A')) . '</span>';
+                                            } catch (Exception $e) { echo '&mdash;'; }
+                                        } else {
+                                            echo esc_html($matchup->result ?? '&mdash;');
+                                        }
+                                        ?>
+                                    </td>
                                     <?php foreach ($players as $player_id => $player_name): ?>
-                                        <?php 
+                                        <?php
                                         $highlight_class = ($player_id == $current_user_id) ? 'kf-current-player-col' : '';
-                                        
+
                                         if ($picks_are_hidden && $player_id !== $current_user_id) {
                                             ?>
                                             <td class="kf-pick-cell kf-cell-hidden <?php echo $highlight_class; ?>" colspan="2" style="text-align:center; font-style:italic; color:#999;">Hidden</td>
@@ -507,6 +547,16 @@ function kf_week_summary_view() {
                                             $pick_with_mark = $pick !== '-' ? '— ' . $pick : '—';
                                         } else {
                                             $class = $is_win ? 'kf-win' : ($matchup->result ? 'kf-loss' : '');
+                                            // Live game: tint pick based on whether it's currently winning
+                                            if (!$matchup->result && $m_is_live && $pick_data) {
+                                                if ($current_leader !== null) {
+                                                    $class = (strcasecmp(trim($pick_data->pick), $current_leader) === 0)
+                                                             ? 'kf-pick-live-winning'
+                                                             : 'kf-pick-live-losing';
+                                                } else {
+                                                    $class = 'kf-pick-live-tied';
+                                                }
+                                            }
                                             if ($pick_data) {
                                                 $display_points = $is_finalized ? ($is_win ? (string)$points : '0') : (string)$points;
                                             } else {
@@ -518,7 +568,7 @@ function kf_week_summary_view() {
                                         <td class="<?php echo $class; ?> kf-pick-cell <?php echo $highlight_class; ?>"><?php echo $pick_with_mark; ?></td>
                                         <td class="<?php echo $class; ?> kf-points-cell <?php echo $highlight_class; ?>"><?php echo $display_points; ?></td>
                                     <?php endforeach; ?>
-                                    <?php if ($last_week_bpow_winner_id && !$picks_are_hidden): 
+                                    <?php if ($last_week_bpow_winner_id && !$picks_are_hidden):
                                         $highlight_class = ($last_week_bpow_winner_id == $current_user_id) ? 'kf-current-player-col' : '';
                                         $bpow_pick_data = $bpow_picks_map[$matchup->id] ?? null;
                                         $bpow_pick = $bpow_pick_data ? esc_html($bpow_pick_data->pick) : '-';
@@ -533,6 +583,15 @@ function kf_week_summary_view() {
                                             $bpow_pick_with_mark = $bpow_pick !== '-' ? '— ' . $bpow_pick : '—';
                                         } else {
                                             $bpow_class = $bpow_is_win ? 'kf-win' : ($matchup->result ? 'kf-loss' : '');
+                                            if (!$matchup->result && $m_is_live && $bpow_pick_data) {
+                                                if ($current_leader !== null) {
+                                                    $bpow_class = (strcasecmp(trim($bpow_pick_data->pick), $current_leader) === 0)
+                                                                  ? 'kf-pick-live-winning'
+                                                                  : 'kf-pick-live-losing';
+                                                } else {
+                                                    $bpow_class = 'kf-pick-live-tied';
+                                                }
+                                            }
                                             if ($bpow_pick_data) {
                                                 $bpow_display_points = $is_finalized ? ($bpow_is_win ? (string)$bpow_points : '0') : (string)$bpow_points;
                                             } else {
@@ -546,11 +605,43 @@ function kf_week_summary_view() {
                                     <?php endif; ?>
                                 </tr>
                             <?php endforeach; ?>
-                            
-                            <?php if ($tiebreaker_matchup): ?>
-                                <tr>
+
+                            <?php if ($tiebreaker_matchup):
+                                $tb_status    = $tiebreaker_matchup->game_status ?? null;
+                                $tb_hs        = $tiebreaker_matchup->home_score !== null ? (int)$tiebreaker_matchup->home_score : null;
+                                $tb_as        = $tiebreaker_matchup->away_score !== null ? (int)$tiebreaker_matchup->away_score : null;
+                                $tb_is_live   = ($tb_status === 'in_progress');
+                                $tb_has_scores = ($tb_hs !== null && $tb_as !== null);
+                                $tb_live_total = $tb_has_scores ? ($tb_hs + $tb_as) : null;
+                            ?>
+                                <tr class="<?php echo $tb_is_live ? 'kf-row-live' : ''; ?>">
                                     <td><?php echo esc_html($tiebreaker_matchup->team_b . ' @ ' . $tiebreaker_matchup->team_a); ?> <strong>(Tiebreaker)</strong></td>
-                                    <td><?php echo esc_html($tiebreaker_matchup->result); ?></td>
+                                    <td class="kf-winner-cell">
+                                        <?php
+                                        if ($tiebreaker_matchup->result !== null && $tiebreaker_matchup->result !== '') {
+                                            echo esc_html($tiebreaker_matchup->result);
+                                            if ($tb_has_scores) {
+                                                echo ' <small class="kf-final-score-inline">(' . $tb_as . '&ndash;' . $tb_hs . ')</small>';
+                                            }
+                                        } elseif ($tb_is_live && $tb_has_scores) {
+                                            echo '<span class="kf-live-badge">LIVE</span>';
+                                            echo '<span class="kf-live-score-display">';
+                                            echo esc_html($tiebreaker_matchup->team_b) . ' ' . $tb_as . ' &ndash; ' . $tb_hs . ' ' . esc_html($tiebreaker_matchup->team_a);
+                                            echo ' <em class="kf-live-combined">Combined: ' . $tb_live_total . '</em>';
+                                            echo '</span>';
+                                        } elseif ($tb_is_live) {
+                                            echo '<span class="kf-live-badge">LIVE</span>';
+                                        } elseif ($tb_status === 'scheduled' && !empty($tiebreaker_matchup->game_datetime)) {
+                                            try {
+                                                $utc_dt = new DateTime($tiebreaker_matchup->game_datetime, new DateTimeZone('UTC'));
+                                                $utc_dt->setTimezone(new DateTimeZone(wp_timezone_string()));
+                                                echo '<span class="kf-kickoff-time">' . esc_html($utc_dt->format('D g:i A')) . '</span>';
+                                            } catch (Exception $e) { echo '&mdash;'; }
+                                        } else {
+                                            echo esc_html($tiebreaker_matchup->result ?? '&mdash;');
+                                        }
+                                        ?>
+                                    </td>
                                     <?php foreach ($players as $player_id => $player_name): ?>
                                         <?php 
                                         $highlight_class = ($player_id == $current_user_id) ? 'kf-current-player-col' : '';
@@ -570,6 +661,9 @@ function kf_week_summary_view() {
                                             $diff = $finalized_scores[$player_id]['tiebreaker_diff'];
                                         } elseif (is_numeric($tiebreaker_actual_score) && $pick_data && is_numeric($pick_data->pick)) {
                                             $diff = number_format(abs(floatval($tiebreaker_actual_score) - floatval($pick_data->pick)), 1);
+                                        } elseif ($tb_is_live && $tb_live_total !== null && $pick_data && is_numeric($pick_data->pick)) {
+                                            // Show live diff vs current combined score
+                                            $diff = number_format(abs($tb_live_total - floatval($pick_data->pick)), 1) . '*';
                                         }
                                         ?>
                                         <td class="kf-pick-cell <?php echo $highlight_class; ?>"><?php echo $pick; ?></td>
