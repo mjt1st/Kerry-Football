@@ -216,6 +216,20 @@
             }
         }
 
+        // ---- Fetch button state helpers ----
+        function setFetchBtnReady() {
+            // Primary state: data not yet loaded, action needed
+            fetchBtn.textContent = 'Fetch Games';
+            fetchBtn.classList.remove('kf-button-secondary');
+            fetchBtn.title = '';
+        }
+        function setFetchBtnLoaded() {
+            // Muted state: data already loaded, filters work without re-fetching
+            fetchBtn.textContent = '\u21BA Re-fetch';
+            fetchBtn.classList.add('kf-button-secondary');
+            fetchBtn.title = 'Filters update instantly \u2014 only click to load a different sport or week';
+        }
+
         // ---- Sport Change: swap division vs conference filter ----
         function updateSportControls() {
             var isCollege = sportSelect && sportSelect.value === 'college-football';
@@ -224,11 +238,25 @@
             gamesList.innerHTML = '';
             fetchedGames = [];
             if (sortFilterBar) sortFilterBar.style.display = 'none';
+            if (fetchBtn) setFetchBtnReady();
             updateSelectedCount();
         }
         if (sportSelect) {
             sportSelect.addEventListener('change', updateSportControls);
             updateSportControls();
+        }
+
+        // Week change also signals a new fetch is needed
+        if (weekSelect) {
+            weekSelect.addEventListener('change', function () {
+                if (fetchedGames.length) {
+                    gamesList.innerHTML = '';
+                    fetchedGames = [];
+                    if (sortFilterBar) sortFilterBar.style.display = 'none';
+                    if (fetchBtn) setFetchBtnReady();
+                    updateSelectedCount();
+                }
+            });
         }
 
         // ---- League week # → ESPN calendar week auto-sync + duplicate guard ----
@@ -310,10 +338,12 @@
                         fetchedGames = resp.data.games;
                         if (sortFilterBar) sortFilterBar.style.display = 'block';
                         renderGames(getFilteredSorted());
-                        showStatus(fetchedGames.length + ' game(s) loaded.', 'success');
+                        showStatus(fetchedGames.length + ' game(s) loaded. Use filters below to narrow results \u2014 no need to re-fetch.', 'success');
+                        setFetchBtnLoaded();
                     } else {
                         var msg = (resp.data && resp.data.message) ? resp.data.message : 'No games found.';
                         showStatus(msg, 'warning');
+                        setFetchBtnReady();
                     }
                 })
                 .catch(function (err) {
