@@ -22,24 +22,25 @@ function kf_week_summary_view() {
     global $wpdb;
 
     $current_user_id = get_current_user_id();
-    $is_commissioner = current_user_can('manage_options');
     $week_id = isset($_GET['week_id']) ? intval($_GET['week_id']) : 0;
-    
+
     if (!$week_id) {
         return '<p>Invalid week. Please select a valid week from the Season Summary.</p>';
     }
-    
+
     // --- MODIFICATION: Join with seasons table to get season name for export/print titles ---
     $weeks_table = $wpdb->prefix . 'weeks';
     $seasons_table = $wpdb->prefix . 'seasons';
     $week = $wpdb->get_row($wpdb->prepare(
-        "SELECT w.*, s.name as season_name FROM $weeks_table w JOIN $seasons_table s ON w.season_id = s.id WHERE w.id = %d", 
+        "SELECT w.*, s.name as season_name FROM $weeks_table w JOIN $seasons_table s ON w.season_id = s.id WHERE w.id = %d",
         $week_id
     ));
-    
+
     if (!$week || $week->season_id != ($_SESSION['kf_active_season_id'] ?? 0)) {
         return '<p>Week not found or does not belong to the active season. Please select a valid week from the Season Summary.</p>';
     }
+
+    $is_commissioner = kf_can_manage_season($week->season_id);
 
     // --- Deadline and Pick Visibility Logic ---
     $deadline_passed = false;

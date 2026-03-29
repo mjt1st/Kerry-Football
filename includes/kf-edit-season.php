@@ -15,18 +15,21 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Renders the form to edit an existing season.
  */
 function kf_edit_season_form_shortcode() {
-    // Security check: User must be a commissioner.
-    if ( ! current_user_can('manage_options') ) {
+    // Security check: User must be logged in.
+    if ( ! is_user_logged_in() ) {
         return '<div class="kf-container"><p>You do not have permission to view this page.</p></div>';
     }
-    
+
     if (session_status() === PHP_SESSION_NONE) { session_start(); }
     global $wpdb;
 
     // Get the season ID from the session.
-    $season_id = $_SESSION['kf_active_season_id'] ?? 0;
+    $season_id = isset($_SESSION['kf_active_season_id']) ? (int)$_SESSION['kf_active_season_id'] : 0;
     if (!$season_id) {
         return '<div class="kf-container"><p>No active season selected. Please select a season from the main menu to edit.</p></div>';
+    }
+    if (!kf_can_manage_season($season_id)) {
+        return '<div class="kf-container"><p>You do not have permission to view this page.</p></div>';
     }
 
     $seasons_table = $wpdb->prefix . 'seasons';

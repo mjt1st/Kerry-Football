@@ -17,7 +17,7 @@ function kf_season_summary_view() {
     if (!$season_id) return '<div class="kf-container"><h1>Season Summary</h1><p>Please select a season from the main menu to begin.</p></div>';
     
     $current_user_id = get_current_user_id();
-    $is_commissioner = current_user_can('manage_options');
+    $is_commissioner = kf_can_manage_season($season_id);
 
     $season = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}seasons WHERE id = %d", $season_id));
     if (!$season) {

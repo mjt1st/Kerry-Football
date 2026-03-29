@@ -28,7 +28,6 @@ function kf_can_manage_season( $season_id, $user_id = null ) {
     if ( ! $user_id ) {
         $user_id = get_current_user_id();
     }
-
     // Site administrators are implicit commissioners in every league.
     if ( user_can( $user_id, 'manage_options' ) ) return true;
 
@@ -41,11 +40,42 @@ function kf_can_manage_season( $season_id, $user_id = null ) {
     ) );
     if ( $is_creator ) return true;
 
-    // Accepted participant (includes co-commissioners who were invited)?
+    // Accepted participant explicitly flagged as co-commissioner for this season.
     return (bool) $wpdb->get_var( $wpdb->prepare(
         "SELECT COUNT(*) FROM {$wpdb->prefix}season_players
-         WHERE season_id = %d AND user_id = %d AND status = 'accepted'",
+         WHERE season_id = %d AND user_id = %d AND status = 'accepted' AND is_commissioner = 1",
         $season_id, $user_id
+    ) );
+}
+
+/**
+ * Returns true if the user has commissioner access to at least one season.
+ * Used to gate access to pages that require commissioner role but have no
+ * specific season context yet (e.g. the Commissioner Dashboard listing page).
+ *
+ * @param int|null $user_id Defaults to current user.
+ * @return bool
+ */
+function kf_is_any_commissioner( $user_id = null ) {
+    if ( ! $user_id ) {
+        $user_id = get_current_user_id();
+    }
+    if ( user_can( $user_id, 'manage_options' ) ) return true;
+
+    global $wpdb;
+
+    // Creator of any season?
+    $is_creator = (bool) $wpdb->get_var( $wpdb->prepare(
+        "SELECT COUNT(*) FROM {$wpdb->prefix}seasons WHERE created_by = %d",
+        $user_id
+    ) );
+    if ( $is_creator ) return true;
+
+    // Explicitly-flagged co-commissioner of any accepted season?
+    return (bool) $wpdb->get_var( $wpdb->prepare(
+        "SELECT COUNT(*) FROM {$wpdb->prefix}season_players
+         WHERE user_id = %d AND status = 'accepted' AND is_commissioner = 1",
+        $user_id
     ) );
 }
 

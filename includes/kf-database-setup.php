@@ -46,6 +46,7 @@ function kf_install_db() {
         season_id INT NOT NULL,
         user_id BIGINT UNSIGNED NOT NULL,
         status ENUM('invited','accepted','declined') DEFAULT 'invited',
+        is_commissioner TINYINT(1) DEFAULT 0,
         PRIMARY KEY  (id),
         UNIQUE KEY unique_season_user (season_id, user_id),
         KEY user_id (user_id)

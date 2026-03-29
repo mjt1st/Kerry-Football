@@ -8,7 +8,7 @@
  */
 
 function kf_commissioner_dashboard_shortcode() {
-    if (!is_user_logged_in() || !current_user_can('manage_options')) {
+    if (!is_user_logged_in() || !kf_is_any_commissioner()) {
         return '<p>You do not have access to this page.</p>';
     }
 
@@ -101,7 +101,7 @@ function kf_commissioner_dashboard_shortcode() {
         $seasons = $wpdb->get_results( $wpdb->prepare(
             "SELECT DISTINCT s.* FROM $seasons_table s
              LEFT JOIN {$wpdb->prefix}season_players sp ON s.id = sp.season_id AND sp.user_id = %d AND sp.status = 'accepted'
-             WHERE s.created_by = %d OR sp.user_id IS NOT NULL
+             WHERE s.created_by = %d OR (sp.user_id IS NOT NULL AND sp.is_commissioner = 1)
              ORDER BY s.is_active DESC, s.id DESC",
             $current_user_id, $current_user_id
         ) );

@@ -22,12 +22,13 @@
 
 function kf_week_setup_form() {
     // Standard security and session checks
-    if (!is_user_logged_in() || !current_user_can('manage_options')) { return '<p>You do not have access to this page.</p>'; }
+    if (!is_user_logged_in()) { return '<p>You do not have access to this page.</p>'; }
     if (session_status() === PHP_SESSION_NONE) { session_start(); }
 
     global $wpdb;
     $season_id = $_SESSION['kf_active_season_id'] ?? 0;
     if (!$season_id) { return '<div class="kf-container"><h1>Week Setup</h1><p>No season selected.</p></div>'; }
+    if (!kf_can_manage_season($season_id)) { return '<p>You do not have access to this page.</p>'; }
 
     // Define table names
     $weeks_table = $wpdb->prefix . 'weeks';

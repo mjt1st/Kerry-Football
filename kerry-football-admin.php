@@ -92,7 +92,7 @@ function kf_ajax_update_notification_setting() {
     $notification_type = isset($_POST['notification_type']) ? sanitize_text_field($_POST['notification_type']) : '';
     $is_enabled = isset($_POST['is_enabled']) && $_POST['is_enabled'] === 'true' ? 1 : 0;
     $current_user_id = get_current_user_id();
-    $is_commissioner = current_user_can('manage_options');
+    $is_commissioner = kf_can_manage_season($season_id);
 
     // Security check: Ensure the user has permission to change this setting
     if ($user_id !== $current_user_id && !$is_commissioner) {
@@ -137,17 +137,19 @@ function kf_ajax_reverse_week_finalization() {
         wp_send_json_error(['message' => 'Security check failed.']);
         return;
     }
-    if (!current_user_can('manage_options')) {
-        wp_send_json_error(['message' => 'You do not have permission to perform this action.']);
-        return;
-    }
-
     $week_id = isset($_POST['week_id']) ? intval($_POST['week_id']) : 0;
     if ($week_id <= 0) {
         wp_send_json_error(['message' => 'Invalid week ID provided.']);
         return;
     }
-    
+
+    global $wpdb;
+    $rev_season_id = $wpdb->get_var($wpdb->prepare("SELECT season_id FROM {$wpdb->prefix}weeks WHERE id = %d", $week_id));
+    if (!kf_can_manage_season((int)$rev_season_id)) {
+        wp_send_json_error(['message' => 'You do not have permission to perform this action.']);
+        return;
+    }
+
     if (function_exists('kf_reverse_week')) {
         $result = kf_reverse_week($week_id);
         if ($result) {
@@ -167,12 +169,13 @@ function kf_save_player_order_ajax_handler() {
         wp_send_json_error(['message' => 'Security check failed.']);
         return;
     }
-    if (!current_user_can('manage_options')) {
+
+    $season_id = isset($_POST['season_id']) ? intval($_POST['season_id']) : 0;
+    if (!kf_can_manage_season($season_id)) {
         wp_send_json_error(['message' => 'You do not have permission.']);
         return;
     }
 
-    $season_id = isset($_POST['season_id']) ? intval($_POST['season_id']) : 0;
     $player_order_json = isset($_POST['player_order']) ? stripslashes($_POST['player_order']) : '[]';
     $player_order_ids = json_decode($player_order_json, true);
 
@@ -215,7 +218,7 @@ add_action('wp_ajax_kf_save_player_order', 'kf_save_player_order_ajax_handler');
  */
 function kf_ajax_fetch_games() {
     check_ajax_referer('kf_season_switcher_nonce', 'nonce');
-    if (!current_user_can('manage_options')) {
+    if (!kf_is_any_commissioner()) {
         wp_send_json_error(['message' => 'Permission denied.']);
         return;
     }
@@ -287,14 +290,17 @@ add_action('wp_ajax_kf_fetch_games', 'kf_ajax_fetch_games');
  */
 function kf_ajax_refresh_scores() {
     check_ajax_referer('kf_season_switcher_nonce', 'nonce');
-    if (!current_user_can('manage_options')) {
-        wp_send_json_error(['message' => 'Permission denied.']);
-        return;
-    }
 
     $week_id = intval($_POST['week_id'] ?? 0);
     if ($week_id <= 0) {
         wp_send_json_error(['message' => 'Invalid week ID.']);
+        return;
+    }
+
+    global $wpdb;
+    $ref_season_id = $wpdb->get_var($wpdb->prepare("SELECT season_id FROM {$wpdb->prefix}weeks WHERE id = %d", $week_id));
+    if (!kf_can_manage_season((int)$ref_season_id)) {
+        wp_send_json_error(['message' => 'Permission denied.']);
         return;
     }
 
@@ -370,4 +376,72 @@ function kf_deactivate_plugin() {
         kf_unschedule_score_cron();
     }
 }
+/**
+ * AJAX handler: toggle co-commissioner status for a player.
+ * Only manage_options users and season creators can grant/revoke.
+ */
+function kf_ajax_toggle_co_commissioner() {
+    check_ajax_referer('kf_ajax_nonce', 'nonce');
+
+    $season_id      = isset($_POST['season_id'])      ? intval($_POST['season_id'])      : 0;
+    $target_user_id = isset($_POST['target_user_id']) ? intval($_POST['target_user_id']) : 0;
+    $make_commissioner = isset($_POST['make_commissioner']) && $_POST['make_commissioner'] === 'true';
+    $current_user_id = get_current_user_id();
+
+    if (!$season_id || !$target_user_id) {
+        wp_send_json_error(['message' => 'Invalid data.']);
+        return;
+    }
+
+    // Only site admins and season creators may grant/revoke co-commissioner status.
+    // Co-commissioners themselves cannot elevate others (prevents privilege escalation).
+    $can_grant = current_user_can('manage_options');
+    if (!$can_grant) {
+        global $wpdb;
+        $can_grant = (bool) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->prefix}seasons WHERE id = %d AND created_by = %d",
+            $season_id, $current_user_id
+        ));
+    }
+
+    if (!$can_grant) {
+        wp_send_json_error(['message' => 'Permission denied. Only site admins and season creators can manage commissioner status.']);
+        return;
+    }
+
+    // Prevent self-modification
+    if ($target_user_id === $current_user_id) {
+        wp_send_json_error(['message' => 'You cannot change your own commissioner status.']);
+        return;
+    }
+
+    global $wpdb;
+    // Verify target is an accepted member of this season
+    $is_member = (bool) $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM {$wpdb->prefix}season_players
+         WHERE season_id = %d AND user_id = %d AND status = 'accepted'",
+        $season_id, $target_user_id
+    ));
+
+    if (!$is_member) {
+        wp_send_json_error(['message' => 'User is not an accepted member of this season.']);
+        return;
+    }
+
+    $result = $wpdb->update(
+        $wpdb->prefix . 'season_players',
+        ['is_commissioner' => $make_commissioner ? 1 : 0],
+        ['season_id' => $season_id, 'user_id' => $target_user_id]
+    );
+
+    if ($result === false) {
+        wp_send_json_error(['message' => 'Database error saving commissioner status.']);
+    } else {
+        $action = $make_commissioner ? 'granted' : 'revoked';
+        error_log("Kerry Football: Co-commissioner status {$action} for user {$target_user_id} in season {$season_id} by user {$current_user_id}.");
+        wp_send_json_success(['message' => $make_commissioner ? 'Co-commissioner access granted.' : 'Co-commissioner access revoked.']);
+    }
+}
+add_action('wp_ajax_kf_toggle_co_commissioner', 'kf_ajax_toggle_co_commissioner');
+
 // --- END OF FILE: kerry-football-admin.php ---

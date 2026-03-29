@@ -5,14 +5,17 @@
  * NEW: adds "Tie" option for non-tiebreaker matchups.
  */
 function kf_enter_results_shortcode() {
-    if (!is_user_logged_in() || !current_user_can('manage_options')) {
+    if (!is_user_logged_in()) {
         return '<div class="kf-container"><p>You do not have access to this page.</p></div>';
     }
     if (session_status() === PHP_SESSION_NONE) { session_start(); }
 
     global $wpdb;
+    $season_id = isset($_SESSION['kf_active_season_id']) ? (int)$_SESSION['kf_active_season_id'] : 0;
     $week_id   = isset($_GET['week_id']) ? intval($_GET['week_id']) : 0;
-    $season_id = $_SESSION['kf_active_season_id'] ?? 0;
+    if (!$season_id || !kf_can_manage_season($season_id)) {
+        return '<div class="kf-container"><p>You do not have access to this page.</p></div>';
+    }
 
     if (!$week_id || !$season_id) {
         return '<div class="kf-container"><h1>Enter Results</h1><p>Could not determine the week or season. Please return to the Manage Weeks page.</p></div>';

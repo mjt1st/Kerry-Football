@@ -29,7 +29,7 @@ function kf_render_season_switcher_in_menu( $items, $args ) {
     
     global $wpdb;
     $user_id = get_current_user_id();
-    $is_commissioner = current_user_can('manage_options');
+    $is_commissioner = kf_is_any_commissioner();
 
     // CORRECTED: The table name is just 'seasons', not '{$wpdb->prefix}seasons'. $wpdb->prefix is already 'edk_'.
     // Only show active seasons in the switcher (archived seasons are excluded)
@@ -127,7 +127,7 @@ add_filter( 'wp_nav_menu_items', 'kf_add_login_logout_link', 20, 2 );
 
 function kf_filter_menu_items_by_role( $items, $args ) {
     if ( is_admin() ) { return $items; }
-    $is_commissioner = current_user_can('manage_options');
+    $is_commissioner = kf_is_any_commissioner();
     $hidden_parent_ids = [];
     foreach ( $items as $key => $item ) {
         $hide_this_item = ( in_array( 'kf-commissioner-only', $item->classes ) && ! $is_commissioner ) ||

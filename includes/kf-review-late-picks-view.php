@@ -10,15 +10,18 @@
 
 function kf_review_late_picks_view() {
     // Ensure user is a logged-in commissioner
-    if (!is_user_logged_in() || !current_user_can('manage_options')) {
+    if (!is_user_logged_in()) {
         return '<p>You do not have permission to view this page.</p>';
     }
     // REMOVED UNSAFE SESSION START: if (session_status() === PHP_SESSION_NONE) { session_start(); }
 
     global $wpdb;
-    $season_id = $_SESSION['kf_active_season_id'] ?? 0;
+    $season_id = isset($_SESSION['kf_active_season_id']) ? (int)$_SESSION['kf_active_season_id'] : 0;
     if (!$season_id) {
         return '<div class="kf-container"><h1>Review Late Submissions</h1><p>Please select an active season from the main menu.</p></div>';
+    }
+    if (!kf_can_manage_season($season_id)) {
+        return '<p>You do not have permission to view this page.</p>';
     }
 
     $pending_picks_table = $wpdb->prefix . 'pending_picks';

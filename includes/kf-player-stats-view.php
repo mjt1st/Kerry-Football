@@ -21,7 +21,7 @@ function kf_player_stats_shortcode() {
     global $wpdb;
     $current_user    = wp_get_current_user();
     $current_user_id = $current_user->ID;
-    $is_commissioner = current_user_can( 'manage_options' );
+    $is_commissioner = kf_is_any_commissioner();
 
     // Commissioners can view any player's stats via ?player_id=X
     $view_user_id = $current_user_id;

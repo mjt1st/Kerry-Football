@@ -68,7 +68,7 @@ function kf_player_dashboard_view() {
         return '<div class="kf-container"><p>The selected season could not be found.</p></div>';
     }
 
-    $is_commissioner = current_user_can('manage_options');
+    $is_commissioner = kf_can_manage_season($season_id);
     $player_info = get_userdata($user_id);
     $is_active_player = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->prefix}season_players WHERE user_id = %d AND season_id = %d AND status = 'accepted'", $user_id, $season_id));
 
