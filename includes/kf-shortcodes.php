@@ -39,5 +39,8 @@ function kf_register_shortcodes() {
     // Site admin dashboard (user management, league health).
     add_shortcode('kf_admin_dashboard', 'kf_admin_dashboard_shortcode');
 
+    // Player stats: cumulative cross-season metrics and all-time leaderboard.
+    add_shortcode('kf_player_stats', 'kf_player_stats_shortcode');
+
     // COMMENT: Removed a duplicate registration for 'kf_edit_season' that pointed to an old function name.
 }

@@ -63,6 +63,7 @@ require_once KF_PLUGIN_PATH . 'includes/kf-week-setup.php';
 require_once KF_PLUGIN_PATH . 'includes/kf-week-summary-view.php';
 require_once KF_PLUGIN_PATH . 'includes/kf-notification-settings-view.php';
 require_once KF_PLUGIN_PATH . 'includes/kf-admin-dashboard.php';
+require_once KF_PLUGIN_PATH . 'includes/kf-player-stats-view.php';
 
 
 // Sports API Integration

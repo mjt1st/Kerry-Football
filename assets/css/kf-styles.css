@@ -1001,3 +1001,183 @@
         text-align: center;
     }
 }
+
+/* ============================================================
+   Player Stats Page
+   ============================================================ */
+
+.kf-stats-page .kf-stats-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1em;
+    margin-bottom: 1.5em;
+}
+.kf-stats-page .kf-stats-header h1 { margin: 0 0 0.2em; }
+.kf-stats-subheading { margin: 0; color: #6b7280; font-size: 1em; }
+
+.kf-stats-player-switcher label {
+    font-size: 0.85em;
+    font-weight: 600;
+    color: #6b7280;
+    display: block;
+    margin-bottom: 4px;
+}
+.kf-stats-player-switcher select {
+    padding: 6px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.9em;
+}
+
+.kf-stats-section-title {
+    font-size: 1.1em;
+    font-weight: 700;
+    margin: 2em 0 0.75em;
+    color: #111827;
+    border-bottom: 2px solid #e5e7eb;
+    padding-bottom: 0.4em;
+}
+.kf-stats-note {
+    font-size: 0.875em;
+    color: #6b7280;
+    margin: -0.4em 0 0.9em;
+}
+
+/* Stat cards grid */
+.kf-stats-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 0.85em;
+    margin-bottom: 0.5em;
+}
+.kf-stat-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 1em 1.1em;
+    text-align: center;
+    transition: box-shadow 0.15s;
+}
+.kf-stat-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.kf-stat-card-value {
+    font-size: 1.9em;
+    font-weight: 700;
+    color: #111827;
+    line-height: 1.1;
+    margin-bottom: 0.15em;
+}
+.kf-stat-card-label {
+    font-size: 0.78em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6b7280;
+}
+.kf-stat-card-sub {
+    font-size: 0.75em;
+    color: #9ca3af;
+    margin-top: 0.3em;
+}
+/* Gold highlight (best finish, biggest upset, best week) */
+.kf-stat-card-gold {
+    background: #fefce8;
+    border-color: #fde68a;
+}
+.kf-stat-card-gold .kf-stat-card-value { color: #92400e; }
+/* Blue highlight (awards earned) */
+.kf-stat-card-highlight {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+}
+.kf-stat-card-highlight .kf-stat-card-value { color: #1d4ed8; }
+
+/* Confidence tier bars */
+.kf-stats-confidence {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6em;
+    margin-bottom: 1em;
+}
+.kf-confidence-row {
+    display: grid;
+    grid-template-columns: 160px 1fr 52px 80px;
+    align-items: center;
+    gap: 0.75em;
+}
+.kf-confidence-label {
+    font-size: 0.9em;
+    font-weight: 600;
+    color: #374151;
+}
+.kf-confidence-bar-wrap {
+    background: #f3f4f6;
+    border-radius: 99px;
+    height: 12px;
+    overflow: hidden;
+}
+.kf-confidence-bar {
+    height: 100%;
+    border-radius: 99px;
+    transition: width 0.4s ease;
+}
+.kf-confidence-pct {
+    font-size: 0.9em;
+    font-weight: 700;
+    text-align: right;
+}
+.kf-confidence-record {
+    font-size: 0.8em;
+    color: #9ca3af;
+    text-align: right;
+}
+
+/* Expandable point-by-point table */
+.kf-stats-details {
+    margin-bottom: 1em;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 0.75em 1em;
+}
+.kf-stats-details summary {
+    font-size: 0.875em;
+    font-weight: 600;
+    color: #4b5563;
+    cursor: pointer;
+    user-select: none;
+}
+.kf-stats-pv-table td, .kf-stats-pv-table th { font-size: 0.875em; }
+.kf-mini-bar-wrap {
+    background: #f3f4f6;
+    border-radius: 99px;
+    height: 8px;
+    overflow: hidden;
+}
+.kf-mini-bar {
+    height: 100%;
+    border-radius: 99px;
+}
+
+/* All-time leaderboard row highlight */
+.kf-stats-me-row td { background: #eff6ff !important; font-weight: 600; }
+.kf-stats-you-badge {
+    display: inline-block;
+    background: #2563eb;
+    color: #fff;
+    font-size: 0.7em;
+    font-weight: 700;
+    padding: 1px 7px;
+    border-radius: 99px;
+    margin-left: 6px;
+    vertical-align: middle;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+@media (max-width: 600px) {
+    .kf-stats-cards { grid-template-columns: repeat(2, 1fr); }
+    .kf-confidence-row { grid-template-columns: 120px 1fr 44px; }
+    .kf-confidence-record { display: none; }
+    .kf-stat-card-value { font-size: 1.5em; }
+}
