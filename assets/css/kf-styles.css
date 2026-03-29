@@ -654,6 +654,19 @@
 .kf-browser-fetch-row .kf-form-group { margin-bottom: 0; }
 .kf-browser-fetch-row select { min-width: 130px; }
 
+/* Locked sport display (sport is set at season creation, not changeable here) */
+.kf-sport-locked-display {
+    display: inline-block;
+    padding: 6px 12px;
+    background: #f0f4f8;
+    border: 1px solid #cdd5df;
+    border-radius: 4px;
+    font-weight: bold;
+    color: #444;
+    font-size: 0.95em;
+    min-width: 130px;
+}
+
 /* Sort/filter bar (shown after fetch) */
 .kf-sort-filter-bar {
     background: #f8fafc;

@@ -259,14 +259,25 @@ function kf_week_setup_form() {
             <div id="kf-game-browser" style="display:none;margin-top:1.5em;" class="kf-card">
                 <h3 style="margin-top:0;">Browse Games</h3>
 
-                <!-- Row 1: Sport / Week / Conference (college) / Division (NFL) + Fetch -->
+                <?php
+                // Determine display names and initial filter visibility
+                $sport_label      = $default_sport === 'college-football' ? 'College Football' : 'NFL';
+                $is_college       = $default_sport === 'college-football';
+                $division_display = $is_college ? 'none'  : 'block';
+                $conf_display     = $is_college ? 'block' : 'none';
+                // Postseason weeks only make sense for NFL
+                $show_postseason  = ! $is_college;
+                ?>
+                <!-- Row 1: Sport (locked) / Week / Conference (college) / Division (NFL) + Fetch -->
                 <div class="kf-browser-fetch-row">
                     <div class="kf-form-group" style="margin-bottom:0;">
-                        <label for="kf-sport-select">Sport</label>
-                        <select id="kf-sport-select">
-                            <option value="nfl" <?php selected($default_sport, 'nfl'); ?>>NFL</option>
-                            <option value="college-football" <?php selected($default_sport, 'college-football'); ?>>College Football</option>
-                        </select>
+                        <label>Sport</label>
+                        <!-- Sport is locked to what was set on Create Season — not editable here -->
+                        <div class="kf-sport-locked-display">
+                            <?php echo esc_html( $sport_label ); ?>
+                        </div>
+                        <!-- Hidden input keeps the same id so kf-game-browser.js reads it unchanged -->
+                        <input type="hidden" id="kf-sport-select" value="<?php echo esc_attr( $default_sport ); ?>">
                     </div>
                     <div class="kf-form-group" style="margin-bottom:0;">
                         <label for="kf-week-select">Week</label>
@@ -275,15 +286,17 @@ function kf_week_setup_form() {
                             <?php for ($w = 1; $w <= 18; $w++) : ?>
                                 <option value="<?php echo $w; ?>">Week <?php echo $w; ?></option>
                             <?php endfor; ?>
-                            <option value="wildcard">Wild Card</option>
-                            <option value="divisional">Divisional</option>
-                            <option value="conference">Conference Championship</option>
-                            <option value="superbowl">Super Bowl</option>
+                            <?php if ($show_postseason) : ?>
+                                <option value="wildcard">Wild Card</option>
+                                <option value="divisional">Divisional</option>
+                                <option value="conference">Conference Championship</option>
+                                <option value="superbowl">Super Bowl</option>
+                            <?php endif; ?>
                         </select>
                     </div>
 
                     <!-- NFL Division filter (client-side, no refetch needed) -->
-                    <div class="kf-form-group" id="kf-division-group" style="margin-bottom:0;">
+                    <div class="kf-form-group" id="kf-division-group" style="margin-bottom:0;display:<?php echo $division_display; ?>;">
                         <label for="kf-division-filter">Division</label>
                         <select id="kf-division-filter">
                             <option value="">All Divisions</option>
@@ -303,7 +316,7 @@ function kf_week_setup_form() {
                     </div>
 
                     <!-- College Conference filter (server-side, requires refetch) -->
-                    <div class="kf-form-group" id="kf-conference-group" style="margin-bottom:0;display:none;">
+                    <div class="kf-form-group" id="kf-conference-group" style="margin-bottom:0;display:<?php echo $conf_display; ?>;">
                         <label for="kf-conference-filter">Conference</label>
                         <select id="kf-conference-filter">
                             <option value="">All Conferences</option>
