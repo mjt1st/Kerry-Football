@@ -165,16 +165,24 @@ function kf_admin_dashboard_shortcode() {
                             <td>
                                 <strong><?php echo esc_html( $u->display_name ); ?></strong>
                                 <?php if ( $is_commissioner ) : ?>
-                                    <span class="kf-admin-badge kf-badge-commissioner">Commissioner</span>
+                                    <span class="kf-admin-badge kf-badge-commissioner">Admin</span>
                                 <?php endif; ?>
                             </td>
                             <td><?php echo esc_html( $u->user_email ); ?></td>
                             <td style="color:#6b7280;font-size:0.9em;"><?php echo esc_html( $u->user_login ); ?></td>
                             <td>
                                 <?php
-                                $roles = (array) $u->roles;
-                                $roles = array_filter( $roles, fn($r) => ! in_array( $r, ['administrator','subscriber'] ) );
-                                echo esc_html( $roles ? implode( ', ', array_map( 'ucfirst', $roles ) ) : ucfirst( implode( ', ', (array) $u->roles ) ) );
+                                // Show all meaningful roles — administrator first, then custom roles
+                                $all_roles     = (array) $u->roles;
+                                $display_roles = [];
+                                if ( in_array( 'administrator', $all_roles ) ) {
+                                    $display_roles[] = 'Administrator';
+                                }
+                                $league_roles = array_filter( $all_roles, fn($r) => ! in_array( $r, [ 'administrator', 'subscriber' ] ) );
+                                foreach ( $league_roles as $r ) {
+                                    $display_roles[] = ucfirst( $r );
+                                }
+                                echo esc_html( implode( ', ', $display_roles ) ?: 'Subscriber' );
                                 ?>
                             </td>
                             <td style="white-space:nowrap;font-size:0.9em;"><?php echo $registered; ?></td>
