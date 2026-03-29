@@ -48,7 +48,7 @@ function kf_player_management_shortcode() {
     }
 
     // --- Handle Form Submissions (Add, Update, Remove) ---
-    if ( isset( $_POST['kf_add_player'] ) && check_admin_referer( 'kf_add_player_nonce' ) ) {
+    if ( isset( $_POST['kf_add_player'] ) && isset( $_POST['_wpnonce'] ) && wp_verify_nonce( $_POST['_wpnonce'], 'kf_add_player_nonce' ) ) {
         $user_to_add = intval( $_POST['user_id'] );
         $wpdb->insert( $season_players_table,
             [ 'season_id' => $season_id, 'user_id' => $user_to_add, 'status' => 'invited' ],
@@ -65,13 +65,13 @@ function kf_player_management_shortcode() {
         }
         echo '<div class="notice notice-success is-dismissible"><p>Player invited. An invitation email has been sent.</p></div>';
     }
-    if ( isset( $_POST['kf_update_player_status'] ) && check_admin_referer( 'kf_update_status_nonce' ) ) {
+    if ( isset( $_POST['kf_update_player_status'] ) && isset( $_POST['_wpnonce'] ) && wp_verify_nonce( $_POST['_wpnonce'], 'kf_update_status_nonce' ) ) {
         $player_entry_id = intval( $_POST['player_entry_id'] );
         $new_status      = sanitize_text_field( $_POST['new_status'] );
         $wpdb->update( $season_players_table, [ 'status' => $new_status ], [ 'id' => $player_entry_id ] );
         echo '<div class="notice notice-success is-dismissible"><p>Player status updated.</p></div>';
     }
-    if ( isset( $_POST['kf_remove_player'] ) && check_admin_referer( 'kf_remove_player_nonce' ) ) {
+    if ( isset( $_POST['kf_remove_player'] ) && isset( $_POST['_wpnonce'] ) && wp_verify_nonce( $_POST['_wpnonce'], 'kf_remove_player_nonce' ) ) {
         $player_entry_id = intval( $_POST['player_entry_id'] );
         $user_id_to_remove = $wpdb->get_var($wpdb->prepare("SELECT user_id FROM $season_players_table WHERE id = %d", $player_entry_id));
         $wpdb->delete( $season_players_table, [ 'id' => $player_entry_id ] );
