@@ -112,6 +112,7 @@ function kf_commissioner_dashboard_shortcode() {
     $cron_failures        = (int) get_option( 'kf_cron_consecutive_failures', 0 );
     $auto_score_enabled   = get_option( 'kf_auto_score_enabled', '1' ) === '1';
     $cron_next_scheduled  = wp_next_scheduled( 'kf_check_game_scores' );
+    $cron_report          = get_option( 'kf_cron_last_report', [] );
 
     ob_start();
     ?>
@@ -127,6 +128,17 @@ function kf_commissioner_dashboard_shortcode() {
         <?php
         // --- Cron Health Panel ---
         $cron_minutes_ago = $cron_last_run ? (int) round( ( time() - $cron_last_run ) / 60 ) : null;
+
+        // human_time_diff() returns an ABSOLUTE difference, so an overdue event used to read
+        // "Next run: 12 mins from now" when it was in fact twelve minutes LATE. That hides
+        // exactly the failure this panel exists to catch — and it matters more once WP-Cron is
+        // disabled, because then a stalled host job is the only thing that can go wrong.
+        $cron_next_phrase = '';
+        if ( $cron_next_scheduled ) {
+            $cron_next_phrase = ( $cron_next_scheduled >= time() )
+                ? 'in ~' . human_time_diff( time(), $cron_next_scheduled )
+                : 'overdue by ' . human_time_diff( $cron_next_scheduled, time() );
+        }
         $cron_status_color  = '#16a34a'; // green
         $cron_status_label  = '';
         $cron_status_detail = '';
@@ -142,7 +154,7 @@ function kf_commissioner_dashboard_shortcode() {
         } elseif ( $cron_last_run === 0 ) {
             $cron_status_color  = '#2563eb';
             $cron_status_label  = '🔵 Cron scheduled — never run yet';
-            $cron_status_detail = 'Next run: ' . esc_html( human_time_diff( $cron_next_scheduled, time() ) ) . ' from now.';
+            $cron_status_detail = 'Next run ' . esc_html( $cron_next_phrase ) . '.';
         } elseif ( $cron_failures >= 3 ) {
             $cron_status_color  = '#dc2626';
             $cron_status_label  = "🔴 ESPN fetch failing ({$cron_failures} consecutive errors)";
@@ -150,16 +162,38 @@ function kf_commissioner_dashboard_shortcode() {
         } elseif ( $cron_minutes_ago > 60 ) {
             $cron_status_color  = '#d97706';
             $cron_status_label  = "🟡 Last run: {$cron_minutes_ago} min ago";
-            $cron_status_detail = 'Score updates may be delayed. WP-Cron requires site traffic to trigger. Next scheduled: ' . esc_html( human_time_diff( $cron_next_scheduled, time() ) ) . ' from now.';
+            $cron_status_detail = 'Score updates may be delayed. Next run ' . esc_html( $cron_next_phrase ) . '.';
         } else {
             $cron_status_label  = "✅ Last scores checked: {$cron_minutes_ago} min ago";
-            $cron_status_detail = 'Next run: ~' . esc_html( human_time_diff( $cron_next_scheduled, time() ) ) . ' from now.';
+            $cron_status_detail = 'Next run ' . esc_html( $cron_next_phrase ) . '.';
         }
         ?>
         <div style="background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid <?php echo esc_attr($cron_status_color); ?>;border-radius:6px;padding:10px 16px;margin-bottom:1.5em;font-size:0.9em;">
             <strong style="color:<?php echo esc_attr($cron_status_color); ?>;"><?php echo $cron_status_label; ?></strong>
             <?php if ( $cron_status_detail ): ?>
                 <span style="color:#64748b;margin-left:12px;"><?php echo $cron_status_detail; ?></span>
+            <?php endif; ?>
+
+            <?php
+            // What the last run actually did. "It ran" alone cannot tell you whether ESPN
+            // returned nothing, nothing was eligible, or rows were written that had not changed.
+            if ( ! empty( $cron_report ) && is_array( $cron_report ) ) :
+                $rep_unmatched = isset( $cron_report['unmatched'] ) ? count( (array) $cron_report['unmatched'] ) : 0;
+            ?>
+                <div style="margin-top:6px;color:#64748b;font-size:0.92em;">
+                    <?php if ( ! empty( $cron_report['skipped'] ) ) : ?>
+                        Last run: no game in progress, so ESPN was not contacted
+                        (<?php echo intval( $cron_report['pending'] ?? 0 ); ?> game(s) tracked).
+                    <?php else : ?>
+                    Last run checked <strong><?php echo intval( $cron_report['pending'] ?? 0 ); ?></strong> game(s)
+                    via <strong><?php echo esc_html( $cron_report['sport'] ?? '?' ); ?></strong>,
+                    matched <strong><?php echo intval( $cron_report['fetched'] ?? 0 ); ?></strong> at ESPN,
+                    wrote <strong><?php echo intval( $cron_report['updated'] ?? 0 ); ?></strong>.
+                    <?php endif; ?>
+                    <?php if ( $rep_unmatched > 0 ) : ?>
+                        <span style="color:#b45309;"><?php echo intval( $rep_unmatched ); ?> game(s) not found at ESPN.</span>
+                    <?php endif; ?>
+                </div>
             <?php endif; ?>
         </div>
 

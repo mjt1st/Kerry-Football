@@ -27,6 +27,20 @@ function kf_api_settings_shortcode() {
     $saved_message = '';
 
     // --- Handle form submission ---
+    // Force the schema upgrade. kf_maybe_upgrade_db() normally runs on init, but if it ever
+    // fails or is skipped the affected features go quiet with no way to tell from the UI, and
+    // the usual remedy is deactivating the plugin — which nobody wants to do mid-season.
+    if ( $_SERVER['REQUEST_METHOD'] === 'POST'
+        && isset( $_POST['kf_run_db_upgrade'] )
+        && isset( $_POST['kf_api_settings_nonce'] )
+        && wp_verify_nonce( $_POST['kf_api_settings_nonce'], 'kf_save_api_settings' )
+    ) {
+        if ( function_exists( 'kf_install_db' ) ) { kf_install_db(); }
+        delete_option( 'kf_db_version' );
+        if ( function_exists( 'kf_maybe_upgrade_db' ) ) { kf_maybe_upgrade_db(); }
+        echo '<div class="notice notice-success is-dismissible" style="margin-bottom:1em;"><p>Database upgrade run. Check the status below.</p></div>';
+    }
+
     if ( $_SERVER['REQUEST_METHOD'] === 'POST'
         && isset( $_POST['kf_api_settings_nonce'] )
         && wp_verify_nonce( $_POST['kf_api_settings_nonce'], 'kf_save_api_settings' )
@@ -57,6 +71,28 @@ function kf_api_settings_shortcode() {
         $auto_pick_favs = isset( $_POST['kf_enable_auto_pick_favorites'] ) ? '1' : '0';
         update_option( 'kf_enable_auto_pick_favorites', $auto_pick_favs );
 
+        // ESPN User-Agent override. ESPN's CDN blocks by User-Agent and has tightened
+        // twice already; this lets a working value be set without a plugin update.
+        // Clearing it returns to the built-in candidate list.
+        if ( isset( $_POST['kf_espn_user_agent'] ) ) {
+            $espn_ua = sanitize_text_field( wp_unslash( $_POST['kf_espn_user_agent'] ) );
+            update_option( 'kf_espn_user_agent', $espn_ua );
+            // Force re-detection on the next call rather than leading with a stale winner.
+            delete_option( 'kf_espn_working_user_agent' );
+            delete_option( 'kf_espn_working_host' );
+        }
+
+        // Score-check cadence. Rescheduling happens in kf_schedule_score_cron() on the next
+        // init, so saving here is enough — no deactivate/reactivate needed.
+        if ( isset( $_POST['kf_score_check_minutes'] ) ) {
+            $kf_minutes = intval( $_POST['kf_score_check_minutes'] );
+            if ( function_exists( 'kf_score_check_choices' ) && in_array( $kf_minutes, kf_score_check_choices(), true ) ) {
+                update_option( 'kf_score_check_minutes', $kf_minutes );
+                wp_clear_scheduled_hook( 'kf_check_game_scores' );
+                if ( function_exists( 'kf_schedule_score_cron' ) ) { kf_schedule_score_cron(); }
+            }
+        }
+
         $saved_message = '<div class="notice notice-success is-dismissible" style="margin-bottom:1em;"><p>Settings saved successfully!</p></div>';
     }
 
@@ -78,6 +114,8 @@ function kf_api_settings_shortcode() {
     $current_sport     = get_option( 'kf_default_sport', 'nfl' );
     $auto_score_on        = get_option( 'kf_auto_score_enabled', '1' ) === '1';
     $auto_pick_favs_on    = get_option( 'kf_enable_auto_pick_favorites', '1' ) === '1';
+    $espn_ua_custom       = get_option( 'kf_espn_user_agent', '' );
+    $espn_ua_working      = get_option( 'kf_espn_working_user_agent', '' );
 
     // --- Usage stats ---
     $credits_used      = function_exists( 'kf_get_odds_credits_used' ) ? kf_get_odds_credits_used() : 0;
@@ -212,6 +250,82 @@ function kf_api_settings_shortcode() {
                         <?php if ( $usage_pct > 80 ) : ?>
                             <strong style="color:#dc3545;">Credits are running low!</strong>
                         <?php endif; ?>
+                    </p>
+                </div>
+            </fieldset>
+
+
+            <?php
+            // Schema state, surfaced because a migration that has not run is otherwise invisible:
+            // features simply do nothing and there is no way to tell why from the UI.
+            global $wpdb;
+            $kf_db_ver   = get_option( 'kf_db_version', '1.0' );
+            $kf_cols     = $wpdb->get_col( "DESCRIBE {$wpdb->prefix}matchups", 0 );
+            $kf_has_det  = is_array( $kf_cols ) && in_array( 'status_detail', $kf_cols, true );
+            $kf_has_snap = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->prefix . 'week_snapshots' ) ) === $wpdb->prefix . 'week_snapshots';
+            ?>
+            <fieldset style="border:1px solid #e5e7eb;border-radius:6px;padding:1em;margin-top:1.5em;">
+                <legend style="font-weight:bold;padding:0 6px;">Database</legend>
+                <p class="kf-form-note" style="margin-top:0;">
+                    Schema version <strong><?php echo esc_html( $kf_db_ver ); ?></strong>
+                    &nbsp;&middot;&nbsp; week snapshots <?php echo $kf_has_snap ? '&#10003; present' : '&#10007; <strong>missing</strong>'; ?>
+                    &nbsp;&middot;&nbsp; live clock column <?php echo $kf_has_det ? '&#10003; present' : '&#10007; <strong>missing</strong>'; ?>
+                </p>
+                <p style="margin:8px 0 0;">
+                    <button type="submit" name="kf_run_db_upgrade" value="1" class="kf-button kf-button-secondary">Run database upgrade</button>
+                </p>
+                <?php if ( ! $kf_has_det || ! $kf_has_snap ) : ?>
+                    <p class="kf-form-note" style="color:#b45309;">
+                        An upgrade has not completed. Deactivating and reactivating the plugin runs it.
+                        Features relying on the missing piece will do nothing until then.
+                    </p>
+                <?php endif; ?>
+            </fieldset>
+
+            <fieldset style="border:1px solid #e5e7eb;border-radius:6px;padding:1em;margin-top:1.5em;">
+                <legend style="font-weight:bold;padding:0 6px;">ESPN Connection</legend>
+
+                <p class="kf-form-note" style="margin-top:0;">
+                    ESPN blocks server requests by User-Agent and changes what it accepts without notice.
+                    The plugin tries a list of known-good values automatically and remembers the one that
+                    works &mdash; you only need this field if every one of them starts failing.
+                </p>
+
+                <div class="kf-form-group">
+                    <label for="kf_score_check_minutes" style="font-weight:bold;">Check scores every</label>
+                    <select id="kf_score_check_minutes" name="kf_score_check_minutes" style="display:block;max-width:200px;">
+                        <?php foreach ( kf_score_check_choices() as $kf_choice ) : ?>
+                            <option value="<?php echo esc_attr( $kf_choice ); ?>" <?php selected( $kf_choice, kf_score_check_minutes() ); ?>>
+                                <?php echo intval( $kf_choice ); ?> minutes
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <p class="kf-form-note" style="margin-top:4px;">
+                        Your server cron must run at least this often, or this setting has no effect &mdash;
+                        WordPress only runs the check when it is due, so a 5-minute check behind a
+                        15-minute cron still updates every 15 minutes.
+                        Outside game hours no request is made to ESPN at all, so a shorter interval
+                        costs nothing on quiet days.
+                    </p>
+                </div>
+
+                <div class="kf-form-group">
+                    <label for="kf_espn_user_agent" style="font-weight:bold;">User-Agent override</label>
+                    <input type="text" id="kf_espn_user_agent" name="kf_espn_user_agent"
+                           value="<?php echo esc_attr( $espn_ua_custom ); ?>"
+                           placeholder="leave blank to use the built-in list"
+                           style="width:100%;max-width:420px;display:block;">
+                    <p class="kf-form-note" style="margin-top:4px;">
+                        <?php if ( ! empty( $espn_ua_working ) ) : ?>
+                            Currently working: <code><?php echo esc_html( $espn_ua_working ); ?></code>
+                        <?php else : ?>
+                            No successful ESPN request recorded yet.
+                        <?php endif; ?>
+                    </p>
+                    <p class="kf-form-note" style="margin-top:4px;">
+                        Use an honest HTTP client string such as <code>curl/8.4.0</code> or <code>GuzzleHttp/7</code>.
+                        Do <strong>not</strong> use a browser string beginning <code>Mozilla/</code> &mdash; ESPN rejects
+                        those outright, because the claim does not match how the request is actually being made.
                     </p>
                 </div>
             </fieldset>
