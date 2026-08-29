@@ -89,11 +89,63 @@ function kf_week_setup_form() {
             }
 
             if($is_matchup_editable || $is_repair_mode) {
-                $wpdb->delete($matchups_table, ['week_id' => $week_id]);
 
                 $team_a_list      = $_POST['team_a'] ?? []; // Home Team
                 $team_b_list      = $_POST['team_b'] ?? []; // Away Team
                 $tiebreaker_index = isset($_POST['tiebreaker_marker']) ? intval($_POST['tiebreaker_marker']) : -1;
+
+                // Hard control: never store more matchups than the week declares. The browser
+                // caps this too, but the check has to exist here as well — the picks form and
+                // the weekly point values are both sized from matchup_count, so a week holding
+                // more games than it declares produces picks that cannot be scored.
+                //
+                // Validated BEFORE the delete below: that delete removes every matchup for the
+                // week, so bailing out after it would destroy the existing games.
+                $submitted_matchups = 0;
+                foreach ( $team_a_list as $chk_index => $chk_team_a ) {
+                    if ( ! empty( trim( (string) $chk_team_a ) ) && ! empty( trim( (string) ( $team_b_list[ $chk_index ] ?? '' ) ) ) ) {
+                        $submitted_matchups++;
+                    }
+                }
+                $declared_matchups = intval( $_POST['matchup_count'] );
+
+                $too_many_matchups = ( $declared_matchups > 0 && $submitted_matchups > $declared_matchups );
+
+                // SAFETY: never rewrite matchups for a week that already has picks.
+                // Saving deletes every matchup for the week and re-inserts them, which assigns
+                // new AUTO_INCREMENT ids. picks.matchup_id points at the old ids, so a save
+                // after players have submitted would orphan every pick in the week and leave it
+                // unscoreable. A published week is normally locked, but repair mode (a published
+                // week with a missing matchup_count) re-opens this path — which is exactly the
+                // situation where picks already exist.
+                $existing_picks = $edit_mode ? (int) $wpdb->get_var( $wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$wpdb->prefix}picks WHERE week_id = %d", $week_id ) ) : 0;
+                $has_picks = $existing_picks > 0;
+
+                if ( $has_picks ) {
+                    echo '<div class="notice notice-error"><p><strong>Matchups not changed.</strong> This week already has '
+                       . intval( $existing_picks ) . ' submitted pick(s). Rewriting the games now would detach every one of them '
+                       . 'and leave the week impossible to score, so the matchups were left exactly as they were. '
+                       . 'The week settings (deadline, week number) were saved. To change games, reverse the week first.</p></div>';
+                }
+
+                $block_matchup_write = $too_many_matchups || $has_picks;
+
+                if ( $too_many_matchups ) {
+                    echo '<div class="notice notice-error"><p><strong>Too many games.</strong> This week is set up for '
+                       . intval( $declared_matchups ) . ' game(s) but ' . intval( $submitted_matchups )
+                       . ' were submitted. Remove the extra matchups, or raise &ldquo;Games This Week&rdquo;, then save again. '
+                       . 'The week settings were saved, but the matchups were left unchanged and nothing was published.</p></div>';
+                }
+
+                if ( ! $block_matchup_write ) {
+
+                // Last record before the rewrite. The pick guard above should make this
+                // unreachable with picks present, but a snapshot costs nothing and this is
+                // the single most destructive statement in the plugin.
+                if ( function_exists( 'kf_snapshot_week' ) ) { kf_snapshot_week( $week_id, 'pre_matchup_write' ); }
+
+                $wpdb->delete($matchups_table, ['week_id' => $week_id]);
 
                 // SPORTS API V1: Optional ESPN/Odds fields (present when games added via Browse)
                 $espn_ids         = $_POST['espn_game_id'] ?? [];
@@ -117,6 +169,11 @@ function kf_week_setup_form() {
 
                         // Add ESPN/API fields if present (API mode)
                         $espn_id = isset($espn_ids[$index]) ? sanitize_text_field($espn_ids[$index]) : '';
+                        // ESPN event ids are numeric. Anything else is discarded rather than
+                        // stored: this value later reaches an outbound URL via the score cron.
+                        if ( $espn_id !== '' && ! preg_match( '/^[0-9]{1,20}$/', $espn_id ) ) {
+                            $espn_id = '';
+                        }
                         if (!empty($espn_id)) {
                             $matchup_data['espn_game_id']      = $espn_id;
                             $matchup_data['game_status']        = 'scheduled';
@@ -154,9 +211,13 @@ function kf_week_setup_form() {
                         }
                     }
                 }
+
+                } // end: ! $block_matchup_write
             }
 
-            if ($is_publishing) {
+            // Never publish (and never email players) when the matchup write was rejected —
+            // the week would go out with the wrong games.
+            if ($is_publishing && empty($block_matchup_write)) {
                 $week_info = $wpdb->get_row($wpdb->prepare("SELECT week_number, submission_deadline FROM $weeks_table WHERE id = %d", $week_id));
                 $subject = "Picks are Open for Week {$week_info->week_number} of {$season->name}!";
                 
@@ -271,7 +332,7 @@ function kf_week_setup_form() {
             <!-- ═══════════════════════════════════════════════════════════
                  STEP 1 — Week basics: fill these before browsing or typing
                  ═══════════════════════════════════════════════════════════ -->
-            <div class="kf-card" style="margin-bottom:1.25em;"
+            <div class="kf-card kf-week-sticky-header" style="margin-bottom:1.25em;"
                  data-existing-weeks="<?php echo esc_attr( implode( ',', $existing_week_numbers ) ); ?>">
                 <div class="kf-week-quick-setup">
 
@@ -302,6 +363,16 @@ function kf_week_setup_form() {
                         <?php endif; ?>
                     </div>
 
+                    <?php // Read-only mirror of how many matchups are actually in the form. Has no
+                          // name attribute on purpose so it is never submitted — "Games This Week"
+                          // stays the single source of truth for matchup_count. ?>
+                    <div class="kf-form-group" style="margin-bottom:0;">
+                        <label for="kf_games_added" style="font-weight:bold;">Games Added</label>
+                        <input type="number" id="kf_games_added" value="0" readonly tabindex="-1"
+                               style="max-width:70px;display:block;background:#f3f4f6;cursor:default;">
+                        <p class="kf-form-note" id="kf-games-added-note" style="margin-top:3px;">&nbsp;</p>
+                    </div>
+
                     <div class="kf-form-group" style="margin-bottom:0;flex:1;min-width:220px;">
                         <label for="deadline" style="font-weight:bold;">Picks Deadline</label>
                         <input type="datetime-local" id="deadline" name="deadline"
@@ -310,7 +381,31 @@ function kf_week_setup_form() {
                         <p class="kf-form-note" style="margin-top:3px;">Your local time.</p>
                     </div>
 
+                    <?php // Live profile of the week being built. Populated by kf-game-browser.js
+                          // from the matchup fieldsets, so it reflects both browsed and manual games. ?>
+                    <div class="kf-form-group kf-week-profile" style="margin-bottom:0;flex:1;min-width:280px;">
+                        <label style="font-weight:bold;">Week Profile</label>
+                        <?php
+                        // Season baseline for comparison, excluding this week so it is measured
+                        // against the rest of the season rather than against a set containing itself.
+                        $kf_season_profile = function_exists( 'kf_get_season_spread_profile' )
+                            ? kf_get_season_spread_profile( $season_id, $edit_mode ? $week_id : 0 )
+                            : null;
+                        ?>
+                        <div id="kf-week-profile-body" class="kf-week-profile-body"
+                            <?php if ( $kf_season_profile ) : ?>
+                            data-season-avg="<?php echo esc_attr( number_format( (float) $kf_season_profile->avg_spread, 1, '.', '' ) ); ?>"
+                            data-season-closest="<?php echo esc_attr( number_format( (float) $kf_season_profile->closest, 1, '.', '' ) ); ?>"
+                            data-season-biggest="<?php echo esc_attr( number_format( (float) $kf_season_profile->biggest, 1, '.', '' ) ); ?>"
+                            data-season-weeks="<?php echo esc_attr( intval( $kf_season_profile->weeks ) ); ?>"
+                            data-season-games="<?php echo esc_attr( intval( $kf_season_profile->games ) ); ?>"
+                            <?php endif; ?>>
+                            <span class="kf-profile-empty">Add games to see the week profile.</span>
+                        </div>
+                    </div>
+
                 </div>
+                <div id="kf-week-profile-alerts" class="kf-week-profile-alerts"></div>
             </div>
 
             <?php if ($is_matchup_editable) : ?>
@@ -328,8 +423,15 @@ function kf_week_setup_form() {
                 <strong>Manual Entry</strong> works like before &mdash; type team names yourself.
             </p>
 
-            <div id="kf-game-browser" style="display:none;" class="kf-card" style="margin-bottom:1.25em;">
-                <h3 style="margin-top:0;">&#127944; Browse Games</h3>
+            <?php // NOTE: display and margin must live in ONE style attribute - a second
+                  // style attribute on the same element is discarded by the HTML parser. ?>
+            <div id="kf-game-browser" class="kf-card" style="display:none;margin-bottom:1.25em;">
+                <h3 style="margin-top:0;display:flex;align-items:center;gap:0.5em;flex-wrap:wrap;">
+                    <span>&#127944; Browse Games</span>
+                    <span id="kf-browser-summary" style="font-size:0.62em;font-weight:400;color:#6b7280;"></span>
+                    <button type="button" id="kf-browser-toggle" class="kf-button kf-button-secondary"
+                            style="margin-left:auto;font-size:0.6em;padding:4px 12px;">Minimize</button>
+                </h3>
                 <p class="kf-form-note" style="margin-bottom:1em;">
                     Spread, O/U, and moneyline are pulled from ESPN at fetch time and shown on the picks form.
                     <strong>Odds only appear for upcoming games</strong> &mdash; ESPN does not post lines for completed games.
@@ -477,6 +579,33 @@ function kf_week_setup_form() {
                         <div class="kf-form-group"><label>Away Team (Team B): <input type="text" name="team_b[]" value="<?php echo esc_attr($matchup->team_b ?? ''); ?>" required></label></div>
                         <div class="kf-form-group"><label>Home Team (Team A): <input type="text" name="team_a[]" value="<?php echo esc_attr($matchup->team_a ?? ''); ?>" required></label></div>
                         <div class="kf-form-group"><label><input type="radio" name="tiebreaker_marker" value="<?php echo $i; ?>" <?php checked($is_tiebreaker_checked); ?> required> Mark as Tiebreaker</label></div>
+                        <?php
+                        // Carry the ESPN/odds fields back through the form. Saving deletes every
+                        // matchup for the week and re-inserts from POST, so without these hidden
+                        // inputs an edit silently stripped espn_game_id, kickoff time and odds —
+                        // which also stopped the score cron from ever matching those games again.
+                        //
+                        // These must be emitted for EVERY fieldset, even when empty: the POST
+                        // handler reads them by the same index as team_a[]/team_b[], so skipping
+                        // one would shift the remaining values onto the wrong matchups.
+                        $api_fields = [
+                            'espn_game_id'      => $matchup->espn_game_id      ?? '',
+                            'game_datetime'     => $matchup->game_datetime     ?? '',
+                            'odds_api_event_id' => $matchup->odds_api_event_id ?? '',
+                            'spread_home'       => $matchup->spread_home       ?? '',
+                            'spread_away'       => $matchup->spread_away       ?? '',
+                            'moneyline_home'    => $matchup->moneyline_home    ?? '',
+                            'moneyline_away'    => $matchup->moneyline_away    ?? '',
+                            'over_under'        => $matchup->over_under        ?? '',
+                        ];
+                        foreach ( $api_fields as $field_name => $field_value ) {
+                            printf(
+                                '<input type="hidden" name="%s[]" value="%s">',
+                                esc_attr( $field_name ),
+                                esc_attr( $field_value === null ? '' : $field_value )
+                            );
+                        }
+                        ?>
                     </fieldset>
                     <?php
                 }
@@ -490,6 +619,49 @@ function kf_week_setup_form() {
                 <?php endif; ?>
             </div>
         </form>
+
+        <?php
+        // Link-only ESPN attachment. Rendered for any saved week, including published ones:
+        // it posts to kf_espn_apply_link, which UPDATEs the matchup row in place. It never goes
+        // through the Save path that deletes and re-inserts matchups, so it is safe once picks
+        // exist. Deliberately placed outside the form above so nothing here can submit it.
+        ?>
+        <?php if ( $edit_mode && ! empty( $matchups ) && function_exists( 'kf_render_espn_linker' ) ) : ?>
+            <?php kf_render_espn_linker( $week_id, intval( $week->week_number ?? 0 ) ); ?>
+        <?php endif; ?>
+
+        <?php
+        // Snapshot log. Read-only on purpose: restoring is a deliberate human decision, not a
+        // button, because matchup ids change when a week is rewritten and picks would have to
+        // be re-mapped onto the new rows.
+        $kf_snapshots = $edit_mode && function_exists( 'kf_get_week_snapshots' ) ? kf_get_week_snapshots( $week_id ) : [];
+        ?>
+        <?php if ( ! empty( $kf_snapshots ) ) : ?>
+        <div class="kf-card" style="margin-top:1.25em;">
+            <h3 style="margin-top:0;">&#128451; Week snapshots</h3>
+            <p class="kf-form-note" style="margin-top:0;">
+                Taken automatically before anything that could change picks or scoring. Picks are the
+                only part of a week that cannot be recomputed, so these exist to make sure a mistake is
+                always recoverable.
+            </p>
+            <table class="kf-table" style="width:100%;">
+                <thead><tr><th>When</th><th>Taken before</th><th>Picks</th><th>Games</th><th></th></tr></thead>
+                <tbody>
+                <?php foreach ( $kf_snapshots as $snap ) : ?>
+                    <tr>
+                        <td><?php echo esc_html( get_date_from_gmt( $snap->created_at, 'M j, g:i A' ) ); ?></td>
+                        <td><?php echo esc_html( kf_snapshot_reason_label( $snap->reason ) ); ?></td>
+                        <td><?php echo intval( $snap->pick_count ); ?></td>
+                        <td><?php echo intval( $snap->matchup_count ); ?></td>
+                        <td>
+                            <a class="kf-linkish" href="<?php echo esc_url( wp_nonce_url( add_query_arg( [ 'kf_snapshot' => intval( $snap->id ) ] ), 'kf_download_snapshot_' . intval( $snap->id ) ) ); ?>">Download JSON</a>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <?php endif; ?>
     </div>
     
     <?php // In-page JavaScript for dynamic form functionality ?>
@@ -512,6 +684,14 @@ function kf_week_setup_form() {
                 <div class="kf-form-group"><label>Away Team (Team B): <input type="text" name="team_b[]" value="" required></label></div>
                 <div class="kf-form-group"><label>Home Team (Team A): <input type="text" name="team_a[]" value="" required></label></div>
                 <div class="kf-form-group"><label><input type="radio" name="tiebreaker_marker" value="${index}" ${index === 0 ? 'checked' : ''} required> Mark as Tiebreaker</label></div>
+                <input type="hidden" name="espn_game_id[]" value="">
+                <input type="hidden" name="game_datetime[]" value="">
+                <input type="hidden" name="odds_api_event_id[]" value="">
+                <input type="hidden" name="spread_home[]" value="">
+                <input type="hidden" name="spread_away[]" value="">
+                <input type="hidden" name="moneyline_home[]" value="">
+                <input type="hidden" name="moneyline_away[]" value="">
+                <input type="hidden" name="over_under[]" value="">
             `;
             return fieldset;
         }

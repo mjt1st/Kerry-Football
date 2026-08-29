@@ -1,5 +1,58 @@
 <?php
 
+/**
+ * Aggregate spread profile for a season, built from its saved matchups.
+ *
+ * The week profile is DERIVED rather than stored. Every figure it reports already lives in
+ * the matchups table (spread_home per game), so any week's profile can be recomputed at any
+ * time and the season view is just the same query without a week filter. That avoids adding
+ * a column — which on this plugin means a kf_install_db() change plus a kf_maybe_upgrade_db()
+ * block on a live site — and removes any chance of a stored figure drifting out of sync with
+ * the matchups it describes.
+ *
+ * @param int $season_id      Season to aggregate.
+ * @param int $exclude_week_id Optional week to leave out, so a week can be compared against
+ *                             the rest of the season rather than against a set including itself.
+ * @return object|null Row with games, weeks, closest, biggest, avg_spread, close_games,
+ *                     blowouts — or null when the season has no games with odds yet.
+ */
+function kf_get_season_spread_profile( $season_id, $exclude_week_id = 0 ) {
+    global $wpdb;
+
+    $season_id = intval( $season_id );
+    if ( $season_id <= 0 ) {
+        return null;
+    }
+
+    $sql = "SELECT COUNT(*) AS games,
+                   COUNT(DISTINCT w.id) AS weeks,
+                   MIN(ABS(m.spread_home)) AS closest,
+                   MAX(ABS(m.spread_home)) AS biggest,
+                   AVG(ABS(m.spread_home)) AS avg_spread,
+                   SUM(CASE WHEN ABS(m.spread_home) <= 3.5 THEN 1 ELSE 0 END) AS close_games,
+                   SUM(CASE WHEN ABS(m.spread_home) >= 10  THEN 1 ELSE 0 END) AS blowouts
+            FROM {$wpdb->prefix}matchups m
+            INNER JOIN {$wpdb->prefix}weeks w ON w.id = m.week_id
+            WHERE w.season_id = %d
+              AND m.is_tiebreaker = 0
+              AND m.spread_home IS NOT NULL";
+
+    $params = [ $season_id ];
+
+    if ( intval( $exclude_week_id ) > 0 ) {
+        $sql     .= " AND w.id != %d";
+        $params[] = intval( $exclude_week_id );
+    }
+
+    $row = $wpdb->get_row( $wpdb->prepare( $sql, $params ) );
+
+    if ( ! $row || intval( $row->games ) === 0 ) {
+        return null;
+    }
+
+    return $row;
+}
+
 function kf_season_setup_shortcode() {
     if (!is_user_logged_in()) {
         return '<p>You must be logged in to view this page.</p>';

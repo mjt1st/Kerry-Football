@@ -3,7 +3,7 @@
 /**
  * Plugin Name: Kerry Football Admin
  * Description: A plugin for managing a private fantasy football league.
- * Version: 1.4.7
+ * Version: 1.8.2
  * Author: Kerry/Gemini
  *
  * * STABILITY FIX (V2.1.6): Added aggressive session start on the 'init' hook to prevent 
@@ -43,6 +43,7 @@ require_once KF_PLUGIN_PATH . 'includes/kf-enqueue-scripts.php';
 require_once KF_PLUGIN_PATH . 'includes/kf-database-setup.php';
 require_once KF_PLUGIN_PATH . 'includes/kf-menus.php';
 require_once KF_PLUGIN_PATH . 'includes/kf-notifications.php';
+require_once KF_PLUGIN_PATH . 'includes/kf-week-snapshots.php';
 require_once KF_PLUGIN_PATH . 'includes/kf-scoring-engine.php';
 require_once KF_PLUGIN_PATH . 'includes/kf-season-switcher.php';
 require_once KF_PLUGIN_PATH . 'includes/kf-shortcodes.php';
@@ -308,6 +309,326 @@ function kf_ajax_refresh_scores() {
     wp_send_json_success($result);
 }
 add_action('wp_ajax_kf_refresh_scores', 'kf_ajax_refresh_scores');
+
+/**
+ * =============================================================
+ * ESPN link-only AJAX (safe on weeks that already have picks)
+ * =============================================================
+ *
+ * Week Setup saves by deleting every matchup for the week and re-inserting, which changes
+ * matchup ids and would orphan picks. These two handlers exist so an existing matchup can be
+ * attached to a real ESPN game WITHOUT going through that path: they only ever UPDATE the API
+ * columns on a row that already exists. No delete, no insert, no id change, no change to team
+ * names — so they are safe to run mid-week with picks already submitted.
+ */
+
+// Returns candidate ESPN games for each unlinked matchup in a week. Read-only.
+function kf_ajax_espn_link_suggestions() {
+    check_ajax_referer( 'kf_season_switcher_nonce', 'nonce' );
+    global $wpdb;
+
+    $week_id = intval( $_POST['week_id'] ?? 0 );
+    if ( $week_id <= 0 ) {
+        wp_send_json_error( [ 'message' => 'Invalid week.' ] );
+    }
+
+    $week = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$wpdb->prefix}weeks WHERE id = %d", $week_id ) );
+    if ( ! $week ) {
+        wp_send_json_error( [ 'message' => 'Week not found.' ] );
+    }
+    if ( ! kf_can_manage_season( (int) $week->season_id ) ) {
+        wp_send_json_error( [ 'message' => 'Permission denied.' ] );
+    }
+
+    $season = $wpdb->get_row( $wpdb->prepare( "SELECT sport_type FROM {$wpdb->prefix}seasons WHERE id = %d", (int) $week->season_id ) );
+    $sport  = ( $season && $season->sport_type === 'college-football' ) ? 'college-football' : 'nfl';
+
+    $params    = [];
+    $espn_week = intval( $_POST['espn_week'] ?? 0 );
+    if ( $espn_week > 0 ) {
+        $params['week'] = $espn_week;
+    }
+    if ( $sport === 'nfl' ) {
+        $params['seasontype'] = intval( $_POST['seasontype'] ?? 2 );
+    } else {
+        $params['groups'] = 80; // all FBS in one call
+    }
+
+    $games = kf_espn_fetch_scoreboard( $sport, $params );
+    if ( is_wp_error( $games ) ) {
+        wp_send_json_error( [ 'message' => $games->get_error_message() ] );
+    }
+
+    // Games already used by this week must not be offered again.
+    $used = $wpdb->get_col( $wpdb->prepare(
+        "SELECT espn_game_id FROM {$wpdb->prefix}matchups WHERE week_id = %d AND espn_game_id IS NOT NULL AND espn_game_id != %s",
+        $week_id,
+        ''
+    ) );
+
+    // Only regular rows are listed; the tiebreaker row duplicates one of them and is linked
+    // automatically alongside its sibling.
+    $matchups = $wpdb->get_results( $wpdb->prepare(
+        "SELECT id, team_a, team_b, espn_game_id FROM {$wpdb->prefix}matchups
+         WHERE week_id = %d AND is_tiebreaker = 0 ORDER BY id ASC",
+        $week_id
+    ) );
+
+    $rows = [];
+    foreach ( $matchups as $matchup ) {
+        $candidates = [];
+
+        if ( empty( $matchup->espn_game_id ) ) {
+            foreach ( $games as $game ) {
+                if ( in_array( $game['espn_game_id'], $used, true ) ) {
+                    continue;
+                }
+                $home_score = kf_espn_name_score( $matchup->team_a, $game, 'home' );
+                $away_score = kf_espn_name_score( $matchup->team_b, $game, 'away' );
+                if ( $home_score && $away_score ) {
+                    $candidates[] = [
+                        'espn_game_id' => $game['espn_game_id'],
+                        'label'        => $game['away_abbr'] . ' @ ' . $game['home_abbr'],
+                        'kickoff'      => $game['game_datetime'],
+                        'score'        => $home_score + $away_score,
+                    ];
+                }
+            }
+            usort( $candidates, static function ( $a, $b ) {
+                return $b['score'] - $a['score'];
+            } );
+            $candidates = array_slice( $candidates, 0, 4 );
+        }
+
+        $rows[] = [
+            'matchup_id' => (int) $matchup->id,
+            'team_a'     => $matchup->team_a,
+            'team_b'     => $matchup->team_b,
+            'linked'     => ! empty( $matchup->espn_game_id ),
+            'espn_game_id' => (string) $matchup->espn_game_id,
+            'candidates' => $candidates,
+        ];
+    }
+
+    wp_send_json_success( [ 'games_fetched' => count( $games ), 'rows' => $rows ] );
+}
+add_action( 'wp_ajax_kf_espn_link_suggestions', 'kf_ajax_espn_link_suggestions' );
+
+// Attaches one ESPN game to one existing matchup. UPDATE only.
+function kf_ajax_espn_apply_link() {
+    check_ajax_referer( 'kf_season_switcher_nonce', 'nonce' );
+    global $wpdb;
+
+    $matchup_id   = intval( $_POST['matchup_id'] ?? 0 );
+    $espn_game_id = sanitize_text_field( $_POST['espn_game_id'] ?? '' );
+    if ( $matchup_id <= 0 || ! preg_match( '/^[0-9]{1,20}$/', $espn_game_id ) ) {
+        wp_send_json_error( [ 'message' => 'Invalid request.' ] );
+    }
+
+    $matchups_table = $wpdb->prefix . 'matchups';
+    $matchup = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$matchups_table} WHERE id = %d", $matchup_id ) );
+    if ( ! $matchup ) {
+        wp_send_json_error( [ 'message' => 'Matchup not found.' ] );
+    }
+
+    $week = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$wpdb->prefix}weeks WHERE id = %d", (int) $matchup->week_id ) );
+    if ( ! $week || ! kf_can_manage_season( (int) $week->season_id ) ) {
+        wp_send_json_error( [ 'message' => 'Permission denied.' ] );
+    }
+
+    $season = $wpdb->get_row( $wpdb->prepare( "SELECT sport_type FROM {$wpdb->prefix}seasons WHERE id = %d", (int) $week->season_id ) );
+    $sport  = ( $season && $season->sport_type === 'college-football' ) ? 'college-football' : 'nfl';
+
+    // Re-fetch server-side rather than trusting values posted by the browser, so the stored
+    // kickoff and odds are ESPN's, not whatever the client happened to send.
+    $game = kf_espn_fetch_single_event( $sport, $espn_game_id );
+    if ( ! $game ) {
+        wp_send_json_error( [ 'message' => 'Could not load that game from ESPN. Try again in a moment.' ] );
+    }
+
+    $data = [
+        'espn_game_id' => $espn_game_id,
+        'game_status'  => $game['game_status'],
+
+    ];
+    if ( ! empty( $game['game_datetime'] ) ) {
+        $data['game_datetime'] = date( 'Y-m-d H:i:s', strtotime( $game['game_datetime'] ) );
+    }
+    foreach ( [ 'spread_home', 'spread_away', 'over_under' ] as $field ) {
+        if ( isset( $game[ $field ] ) && $game[ $field ] !== null ) {
+            $data[ $field ] = floatval( $game[ $field ] );
+        }
+    }
+    // Carry the current score across too. Without this a freshly linked game showed no score
+    // until the next cron run, which looks like the link did not work.
+    foreach ( [ 'home_score', 'away_score' ] as $field ) {
+        if ( isset( $game[ $field ] ) && $game[ $field ] !== null ) {
+            $data[ $field ] = intval( $game[ $field ] );
+        }
+    }
+
+    foreach ( [ 'moneyline_home', 'moneyline_away' ] as $field ) {
+        if ( isset( $game[ $field ] ) && $game[ $field ] !== null ) {
+            $data[ $field ] = intval( $game[ $field ] );
+        }
+    }
+    // Gated: the column only exists from schema 1.3, and a failed update would lose the
+    // score and kickoff we came here to write.
+    if ( function_exists( 'kf_matchups_have_status_detail' ) && kf_matchups_have_status_detail() ) {
+        $data['status_detail'] = ( $game['game_status'] === 'in_progress' && ! empty( $game['status_detail'] ) )
+            ? substr( (string) $game['status_detail'], 0, 60 )
+            : null;
+    }
+
+    $data['odds_updated_at'] = current_time( 'mysql', true );
+
+    $updated = $wpdb->update( $matchups_table, $data, [ 'id' => $matchup_id ] );
+    if ( $updated === false ) {
+        wp_send_json_error( [ 'message' => 'Database error while linking.' ] );
+    }
+
+    // The tiebreaker row is a second copy of one of the week's games; the cron writes the
+    // combined score into it. Link it too, or the tiebreaker never auto-populates.
+    $tiebreaker_linked = 0;
+    if ( ! $matchup->is_tiebreaker ) {
+        $tiebreaker_linked = (int) $wpdb->query( $wpdb->prepare(
+            "UPDATE {$matchups_table}
+                SET espn_game_id = %s, game_status = %s
+              WHERE week_id = %d AND is_tiebreaker = 1 AND team_a = %s AND team_b = %s
+                AND ( espn_game_id IS NULL OR espn_game_id = %s )",
+            $espn_game_id,
+            $game['game_status'],
+            (int) $matchup->week_id,
+            $matchup->team_a,
+            $matchup->team_b,
+            ''
+        ) );
+    }
+
+    wp_send_json_success( [
+        'message'           => 'Linked to ' . $game['away_abbr'] . ' @ ' . $game['home_abbr'] . '.',
+        'tiebreaker_linked' => $tiebreaker_linked,
+    ] );
+}
+add_action( 'wp_ajax_kf_espn_apply_link', 'kf_ajax_espn_apply_link' );
+
+// Detaches a matchup from its ESPN game. UPDATE only, same safety profile as apply_link.
+function kf_ajax_espn_unlink() {
+    check_ajax_referer( 'kf_season_switcher_nonce', 'nonce' );
+    global $wpdb;
+
+    $matchup_id = intval( $_POST['matchup_id'] ?? 0 );
+    if ( $matchup_id <= 0 ) {
+        wp_send_json_error( [ 'message' => 'Invalid request.' ] );
+    }
+
+    $matchups_table = $wpdb->prefix . 'matchups';
+    $matchup = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$matchups_table} WHERE id = %d", $matchup_id ) );
+    if ( ! $matchup ) {
+        wp_send_json_error( [ 'message' => 'Matchup not found.' ] );
+    }
+
+    $week = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$wpdb->prefix}weeks WHERE id = %d", (int) $matchup->week_id ) );
+    if ( ! $week || ! kf_can_manage_season( (int) $week->season_id ) ) {
+        wp_send_json_error( [ 'message' => 'Permission denied.' ] );
+    }
+
+    // Clear only the ESPN association. Scores and any entered result are left alone: if the
+    // wrong game was linked, the commissioner still needs to see what got written in order to
+    // correct it, and silently blanking a result would be its own kind of data loss.
+    $wpdb->update( $matchups_table, [ 'espn_game_id' => '' ], [ 'id' => $matchup_id ] );
+
+    // Detach the tiebreaker copy of the same game as well.
+    $also = 0;
+    if ( ! $matchup->is_tiebreaker ) {
+        $also = (int) $wpdb->query( $wpdb->prepare(
+            "UPDATE {$matchups_table} SET espn_game_id = %s
+              WHERE week_id = %d AND is_tiebreaker = 1 AND team_a = %s AND team_b = %s",
+            '',
+            (int) $matchup->week_id,
+            $matchup->team_a,
+            $matchup->team_b
+        ) );
+    }
+
+    wp_send_json_success( [
+        'message'            => 'Unlinked. This game will no longer update from ESPN.',
+        'tiebreaker_unlinked'=> $also,
+    ] );
+}
+add_action( 'wp_ajax_kf_espn_unlink', 'kf_ajax_espn_unlink' );
+
+/**
+ * Returns a fingerprint of a week's live state (results, scores, statuses).
+ *
+ * The week summary polls this so a viewer learns that scores moved without having to reload
+ * on spec. It deliberately returns only a hash and a couple of counts — no picks, no names —
+ * so it is cheap and leaks nothing even though it is polled often.
+ *
+ * Nothing is re-rendered automatically from this: when the fingerprint changes the page offers
+ * a Reload. Patching a half-updated table in place would leave win/loss tinting, live subtotals
+ * and the compare overlay disagreeing with each other.
+ */
+function kf_ajax_week_state() {
+    check_ajax_referer( 'kf_season_switcher_nonce', 'nonce' );
+    global $wpdb;
+
+    if ( ! is_user_logged_in() ) {
+        wp_send_json_error( [ 'message' => 'Not logged in.' ] );
+    }
+
+    $week_id = intval( $_POST['week_id'] ?? 0 );
+    if ( $week_id <= 0 ) {
+        wp_send_json_error( [ 'message' => 'Invalid week.' ] );
+    }
+
+    $week = $wpdb->get_row( $wpdb->prepare(
+        "SELECT id, season_id, status FROM {$wpdb->prefix}weeks WHERE id = %d", $week_id ) );
+    if ( ! $week ) {
+        wp_send_json_error( [ 'message' => 'Week not found.' ] );
+    }
+
+    // Viewer must manage the season or be an accepted member of it.
+    $season_id = (int) $week->season_id;
+    $allowed   = kf_can_manage_season( $season_id );
+    if ( ! $allowed ) {
+        $allowed = (bool) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->prefix}season_players WHERE season_id = %d AND user_id = %d AND status = 'accepted'",
+            $season_id,
+            get_current_user_id()
+        ) );
+    }
+    if ( ! $allowed ) {
+        wp_send_json_error( [ 'message' => 'Permission denied.' ] );
+    }
+
+    $rows = $wpdb->get_results( $wpdb->prepare(
+        "SELECT id, result, home_score, away_score, game_status
+           FROM {$wpdb->prefix}matchups
+          WHERE week_id = %d
+          ORDER BY id ASC",
+        $week_id
+    ), ARRAY_A );
+
+    $live = 0;
+    $done = 0;
+    foreach ( $rows as $row ) {
+        if ( $row['game_status'] === 'in_progress' ) { $live++; }
+        if ( $row['result'] !== null && $row['result'] !== '' ) { $done++; }
+    }
+
+    wp_send_json_success( [
+        'fingerprint' => md5( wp_json_encode( $rows ) . '|' . $week->status ),
+        'live'        => $live,
+        'resolved'    => $done,
+        'total'       => count( $rows ),
+        'status'      => $week->status,
+    ] );
+}
+add_action( 'wp_ajax_kf_week_state', 'kf_ajax_week_state' );
+
+
+
 
 /**
  * AJAX handler: Test The Odds API connection.
