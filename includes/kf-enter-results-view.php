@@ -140,53 +140,53 @@ function kf_enter_results_shortcode() {
     }
 
     ob_start(); ?>
-    <div class=”kf-container”>
+    <div class="kf-container">
         <h1>Enter Results</h1>
-        <h2 style=”margin-top:0;”>Week <?php echo esc_html($week->week_number); ?> of <?php echo esc_html($season_name); ?></h2>
-        <a href=”<?php echo esc_url(site_url('/manage-weeks/')); ?>”>&larr; Back to Manage Weeks</a>
+        <h2 style="margin-top:0;">Week <?php echo esc_html($week->week_number); ?> of <?php echo esc_html($season_name); ?></h2>
+        <a href="<?php echo esc_url(site_url('/manage-weeks/')); ?>">&larr; Back to Manage Weeks</a>
 
         <?php
         // Warn commissioner if auto-score is turned off for an API week
         if ($is_api_week && get_option('kf_auto_score_enabled', '1') !== '1'):
         ?>
-            <div style=”background:#fef3c7;border:1px solid #f59e0b;border-left:4px solid #d97706;border-radius:6px;padding:10px 16px;margin-top:1em;font-size:0.92em;”>
+            <div style="background:#fef3c7;border:1px solid #f59e0b;border-left:4px solid #d97706;border-radius:6px;padding:10px 16px;margin-top:1em;font-size:0.92em;">
                 <strong>⚠️ Auto-score is disabled.</strong>
                 Results will <em>not</em> be filled in automatically from ESPN. You must enter them manually, or
-                <a href=”<?php echo esc_url(site_url('/api-settings/')); ?>”>enable auto-score in API Settings</a>.
+                <a href="<?php echo esc_url(site_url('/api-settings/')); ?>">enable auto-score in API Settings</a>.
             </div>
         <?php endif; ?>
 
         <?php if ($is_api_week): ?>
-            <div style=”display:flex;justify-content:flex-end;margin-top:1em;”>
-                <button type=”button” id=”kf-refresh-scores-btn” class=”kf-button” onclick=”kfRefreshScores(<?php echo intval($week_id); ?>)”>&#128260; Refresh Scores Now</button>
+            <div style="display:flex;justify-content:flex-end;margin-top:1em;">
+                <button type="button" id="kf-refresh-scores-btn" class="kf-button" onclick="kfRefreshScores(<?php echo intval($week_id); ?>)">&#128260; Refresh Scores Now</button>
             </div>
-            <div id=”kf-refresh-status” style=”display:none;margin-top:8px;”></div>
+            <div id="kf-refresh-status" style="display:none;margin-top:8px;"></div>
         <?php endif; ?>
 
         <?php if (!empty($season_players_map)): ?>
-        <div class=”kf-live-totals-panel” id=”kf-live-totals-panel”>
-            <h3>&#128200; Live Running Totals <small style=”font-weight:400;font-size:0.82em;color:#555;”>(updates as you select results)</small></h3>
-            <div class=”kf-live-totals-grid” id=”kf-live-totals-grid”>
+        <div class="kf-live-totals-panel" id="kf-live-totals-panel">
+            <h3>&#128200; Live Running Totals <small style="font-weight:400;font-size:0.82em;color:#555;">(updates as you select results)</small></h3>
+            <div class="kf-live-totals-grid" id="kf-live-totals-grid">
                 <?php foreach ($season_players_map as $uid => $name): ?>
-                    <div class=”kf-live-total-chip” id=”kf-chip-<?php echo esc_attr($uid); ?>”>
-                        <span class=”kf-live-total-chip-name”><?php echo esc_html($name); ?></span>
-                        <span class=”kf-live-total-chip-score” id=”kf-chip-score-<?php echo esc_attr($uid); ?>”>0</span>
+                    <div class="kf-live-total-chip" id="kf-chip-<?php echo esc_attr($uid); ?>">
+                        <span class="kf-live-total-chip-name"><?php echo esc_html($name); ?></span>
+                        <span class="kf-live-total-chip-score" id="kf-chip-score-<?php echo esc_attr($uid); ?>">0</span>
                     </div>
                 <?php endforeach; ?>
             </div>
         </div>
         <?php endif; ?>
 
-        <form method=”POST” class=”kf-card kf-tracked-form” style=”margin-top: 1.5em;”>
+        <form method="POST" class="kf-card kf-tracked-form" style="margin-top: 1.5em;">
             <?php wp_nonce_field('kf_save_results_action_' . $week_id, 'kf_results_nonce'); ?>
             <p>For each matchup, select the winning team, <strong>or choose “Tie”</strong>. For the tiebreaker, enter the total points. You can save your progress at any time.</p>
 
-            <table class=”kf-table”>
+            <table class="kf-table">
                 <thead>
                     <tr>
                         <th>Matchup</th>
-                        <?php if ($is_api_week): ?><th style=”width:120px;”>Score</th><th style=”width:100px;”>Status</th><?php endif; ?>
-                        <th style=”width:<?php echo $is_api_week ? '35%' : '50%'; ?>;”>Result</th>
+                        <?php if ($is_api_week): ?><th style="width:120px;">Score</th><th style="width:100px;">Status</th><?php endif; ?>
+                        <th style="width:<?php echo $is_api_week ? '35%' : '50%'; ?>;">Result</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -197,20 +197,28 @@ function kf_enter_results_shortcode() {
                     <tr>
                         <td>
                             <strong><?php echo esc_html($matchup->team_a); ?></strong> vs <strong><?php echo esc_html($matchup->team_b); ?></strong>
-                            <?php if ($matchup->is_tiebreaker): ?><br><em style=”font-size:0.9em;”>(Tiebreaker Game)</em><?php endif; ?>
+                            <?php
+                            // Kickoff time, so the commissioner can see at a glance which games
+                            // have even started. Stored UTC, shown in the site timezone.
+                            if ( ! empty( $matchup->game_datetime ) && $matchup->game_datetime !== '0000-00-00 00:00:00' ) :
+                                $kf_kick = get_date_from_gmt( $matchup->game_datetime, 'D M j, g:i A' );
+                            ?>
+                                <br><span class="kf-kickoff"><?php echo esc_html( $kf_kick ); ?></span>
+                            <?php endif; ?>
+                            <?php if ($matchup->is_tiebreaker): ?><br><em style="font-size:0.9em;">(Tiebreaker Game)</em><?php endif; ?>
                         </td>
 
                         <?php if ($is_api_week): ?>
-                        <td class=”kf-score-cell”>
+                        <td class="kf-score-cell">
                             <?php if ($has_espn && ($matchup->home_score !== null || $matchup->away_score !== null)): ?>
                                 <strong><?php echo intval($matchup->away_score); ?></strong> - <strong><?php echo intval($matchup->home_score); ?></strong>
                             <?php elseif ($has_espn): ?>
-                                <span style=”color:#999;”>&mdash;</span>
+                                <span style="color:#999;">&mdash;</span>
                             <?php else: ?>
-                                <span style=”color:#999;”>Manual</span>
+                                <span style="color:#999;">Manual</span>
                             <?php endif; ?>
                         </td>
-                        <td class=”kf-status-cell”>
+                        <td class="kf-status-cell">
                             <?php if ($has_espn): ?>
                                 <?php
                                 $status = $matchup->game_status ?? 'scheduled';
@@ -224,9 +232,13 @@ function kf_enter_results_shortcode() {
                                     $badge_text = 'LIVE';
                                 }
                                 ?>
-                                <span class=”kf-status-badge <?php echo esc_attr($badge_class); ?>”><?php echo esc_html($badge_text); ?></span>
+                                <span class="kf-status-badge <?php echo esc_attr($badge_class); ?>"><?php echo esc_html($badge_text); ?></span>
+                                <?php // Quarter and clock while the game is running, e.g. "9:55 - 3rd". ?>
+                                <?php if ( ! empty( $matchup->status_detail ) && $matchup->game_status === 'in_progress' ) : ?>
+                                    <br><small class="kf-status-clock"><?php echo esc_html( $matchup->status_detail ); ?></small>
+                                <?php endif; ?>
                                 <?php if ($is_auto_filled): ?>
-                                    <br><small class=”kf-auto-tag”>Auto</small>
+                                    <br><small class="kf-auto-tag">Auto</small>
                                 <?php endif; ?>
                             <?php endif; ?>
                         </td>
@@ -234,20 +246,20 @@ function kf_enter_results_shortcode() {
 
                         <td>
                             <?php if ($matchup->is_tiebreaker): ?>
-                                <input type=”number” step=”any”
-                                       name=”results[<?php echo esc_attr($matchup->id); ?>]”
-                                       value=”<?php echo esc_attr($matchup->result); ?>”
-                                       placeholder=”Enter Total Points”>
+                                <input type="number" step="any"
+                                       name="results[<?php echo esc_attr($matchup->id); ?>]"
+                                       value="<?php echo esc_attr($matchup->result); ?>"
+                                       placeholder="Enter Total Points">
                             <?php else: ?>
-                                <select name=”results[<?php echo esc_attr($matchup->id); ?>]”>
-                                    <option value=””>-- Result Pending --</option>
-                                    <option value=”<?php echo esc_attr($matchup->team_a); ?>” <?php selected($matchup->result, $matchup->team_a); ?>>
+                                <select name="results[<?php echo esc_attr($matchup->id); ?>]">
+                                    <option value="">-- Result Pending --</option>
+                                    <option value="<?php echo esc_attr($matchup->team_a); ?>" <?php selected($matchup->result, $matchup->team_a); ?>>
                                         <?php echo esc_html($matchup->team_a); ?>
                                     </option>
-                                    <option value=”<?php echo esc_attr($matchup->team_b); ?>” <?php selected($matchup->result, $matchup->team_b); ?>>
+                                    <option value="<?php echo esc_attr($matchup->team_b); ?>" <?php selected($matchup->result, $matchup->team_b); ?>>
                                         <?php echo esc_html($matchup->team_b); ?>
                                     </option>
-                                    <option value=”TIE” <?php echo (strtolower((string)$matchup->result) === 'tie') ? 'selected' : ''; ?>>Tie</option>
+                                    <option value="TIE" <?php echo (strtolower((string)$matchup->result) === 'tie') ? 'selected' : ''; ?>>Tie</option>
                                 </select>
                             <?php endif; ?>
                         </td>
@@ -257,7 +269,7 @@ function kf_enter_results_shortcode() {
             </table>
 
             <?php if ($is_api_week): ?>
-                <p class=”kf-form-note” style=”margin-top:8px;”>
+                <p class="kf-form-note" style="margin-top:8px;">
                     <?php
                     $final_count = 0;
                     $total_api = 0;
@@ -274,15 +286,15 @@ function kf_enter_results_shortcode() {
                 </p>
             <?php endif; ?>
 
-            <div class=”kf-form-actions” style=”display:flex;justify-content:space-between;align-items:center;margin-top:1.5em;”>
-                <button type=”submit” name=”save_results” class=”kf-button”>Save Results</button>
+            <div class="kf-form-actions" style="display:flex;justify-content:space-between;align-items:center;margin-top:1.5em;">
+                <button type="submit" name="save_results" class="kf-button">Save Results</button>
 
                 <?php if ($all_results_entered): ?>
-                    <a href=”<?php echo esc_url(add_query_arg('week_id', $week_id, site_url('/week-summary/'))); ?>” class=”kf-button kf-button-action”>
+                    <a href="<?php echo esc_url(add_query_arg('week_id', $week_id, site_url('/week-summary/'))); ?>" class="kf-button kf-button-action">
                         Proceed to Finalize &rarr;
                     </a>
                 <?php else: ?>
-                    <span style=”font-size:0.9em;color:#777;”>The “Finalize” button will appear here once all results are entered.</span>
+                    <span style="font-size:0.9em;color:#777;">The "Finalize" button will appear here once all results are entered.</span>
                 <?php endif; ?>
             </div>
         </form>
@@ -362,6 +374,22 @@ function kf_enter_results_shortcode() {
 
     <?php if ($is_api_week): ?>
     <script>
+    // Surface the previous refresh outcome after the reload, so the result is readable instead
+    // of vanishing along with the page that reported it.
+    document.addEventListener('DOMContentLoaded', function () {
+        try {
+            var carried = window.sessionStorage.getItem('kfRefreshResult');
+            if (!carried) { return; }
+            window.sessionStorage.removeItem('kfRefreshResult');
+            var d = document.getElementById('kf-refresh-status');
+            if (d) {
+                d.style.display = 'block';
+                d.className = 'notice notice-success';
+                d.textContent = carried;
+            }
+        } catch (e) { /* private window */ }
+    });
+
     function kfRefreshScores(weekId) {
         var btn = document.getElementById('kf-refresh-scores-btn');
         var statusDiv = document.getElementById('kf-refresh-status');
@@ -382,9 +410,21 @@ function kf_enter_results_shortcode() {
             btn.disabled = false;
             btn.innerHTML = '&#128260; Refresh Scores Now';
             if (response.success) {
+                var updated = parseInt(response.data.updated, 10) || 0;
+                if (updated === 0) {
+                    // Nothing was written. Do NOT reload — this message is the only thing that
+                    // distinguishes "no games linked" from "ESPN returned nothing", and reloading
+                    // it away leaves an unchanged page with no explanation.
+                    statusDiv.textContent = response.data.message + ' Nothing was changed.';
+                    statusDiv.className = 'notice notice-warning';
+                    return;
+                }
+                try {
+                    window.sessionStorage.setItem('kfRefreshResult', response.data.message);
+                } catch (e) { /* private window */ }
                 statusDiv.textContent = response.data.message + ' Reloading...';
                 statusDiv.className = 'notice notice-success';
-                setTimeout(function() { location.reload(); }, 1500);
+                setTimeout(function() { location.reload(); }, 1200);
             } else {
                 statusDiv.textContent = response.data ? response.data.message : 'Error refreshing scores.';
                 statusDiv.className = 'notice notice-error';
@@ -399,6 +439,14 @@ function kf_enter_results_shortcode() {
     }
     </script>
     <?php endif; ?>
+
+    <?php
+    // Linking lives here as well as on Week Setup: once a week is published, Manage Weeks
+    // offers no route to Week Setup at all, and this is the page a live week is worked from.
+    if ( function_exists( 'kf_render_espn_linker' ) ) {
+        kf_render_espn_linker( $week_id, intval( $week->week_number ?? 0 ) );
+    }
+    ?>
 
     <?php
     return ob_get_clean();
