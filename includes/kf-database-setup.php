@@ -97,6 +97,7 @@ function kf_install_db() {
         home_score INT DEFAULT NULL,
         away_score INT DEFAULT NULL,
         game_status VARCHAR(20) DEFAULT NULL,
+        status_detail VARCHAR(60) DEFAULT NULL,
         spread_home DECIMAL(4,1) DEFAULT NULL,
         spread_away DECIMAL(4,1) DEFAULT NULL,
         moneyline_home INT DEFAULT NULL,
@@ -157,6 +158,21 @@ function kf_install_db() {
 
     // --- edk_score_history ---
     // Archives original scores that have been replaced by a Double Down action.
+    $sql_week_snapshots = "CREATE TABLE {$wpdb->prefix}week_snapshots (
+        id INT AUTO_INCREMENT,
+        week_id INT NOT NULL,
+        season_id INT NOT NULL,
+        reason VARCHAR(50) NOT NULL DEFAULT 'manual',
+        created_by BIGINT UNSIGNED DEFAULT NULL,
+        created_at DATETIME DEFAULT NULL,
+        pick_count INT DEFAULT 0,
+        matchup_count INT DEFAULT 0,
+        payload LONGTEXT,
+        PRIMARY KEY  (id),
+        KEY week_id (week_id),
+        KEY season_id (season_id)
+    ) $charset_collate;";
+
     $sql_score_history = "CREATE TABLE {$wpdb->prefix}score_history (
         id INT AUTO_INCREMENT,
         score_id INT NOT NULL,
@@ -226,6 +242,7 @@ function kf_install_db() {
     dbDelta( $sql_picks );
     dbDelta( $sql_scores );
     dbDelta( $sql_score_history );
+    dbDelta( $sql_week_snapshots );
     dbDelta( $sql_double_down_log );
     dbDelta( $sql_dd_selections );
     dbDelta( $sql_pending_picks );
@@ -243,7 +260,7 @@ function kf_maybe_upgrade_db() {
     $installed = get_option( 'kf_db_version', '1.0' );
 
     // Nothing to do if schema is current.
-    if ( version_compare( $installed, '1.1', '>=' ) ) {
+    if ( version_compare( $installed, '1.3', '>=' ) ) {
         return;
     }
 
@@ -255,6 +272,34 @@ function kf_maybe_upgrade_db() {
         $wpdb->query( "ALTER TABLE {$wpdb->prefix}season_players ADD COLUMN is_commissioner TINYINT(1) NOT NULL DEFAULT 0" );
     }
 
-    update_option( 'kf_db_version', '1.1' );
+    // v1.2 — week_snapshots table. Purely additive: creates a new table and touches no
+    // existing one, so it cannot disturb a live season mid-week.
+    if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->prefix . 'week_snapshots' ) ) !== $wpdb->prefix . 'week_snapshots' ) {
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+        $charset_collate = $wpdb->get_charset_collate();
+        dbDelta( "CREATE TABLE {$wpdb->prefix}week_snapshots (
+            id INT AUTO_INCREMENT,
+            week_id INT NOT NULL,
+            season_id INT NOT NULL,
+            reason VARCHAR(50) NOT NULL DEFAULT 'manual',
+            created_by BIGINT UNSIGNED DEFAULT NULL,
+            created_at DATETIME DEFAULT NULL,
+            pick_count INT DEFAULT 0,
+            matchup_count INT DEFAULT 0,
+            payload LONGTEXT,
+            PRIMARY KEY  (id),
+            KEY week_id (week_id),
+            KEY season_id (season_id)
+        ) $charset_collate;" );
+    }
+
+    // v1.3 — status_detail on matchups: ESPN's "9:55 - 3rd", so live rows can show the
+    // quarter and clock rather than just "in progress". Additive column, no data touched.
+    $matchup_cols = $wpdb->get_col( "DESCRIBE {$wpdb->prefix}matchups", 0 );
+    if ( ! in_array( 'status_detail', $matchup_cols, true ) ) {
+        $wpdb->query( "ALTER TABLE {$wpdb->prefix}matchups ADD COLUMN status_detail VARCHAR(60) DEFAULT NULL" );
+    }
+
+    update_option( 'kf_db_version', '1.3' );
 }
 add_action( 'init', 'kf_maybe_upgrade_db' );

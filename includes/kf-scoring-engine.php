@@ -226,6 +226,11 @@ function kf_check_for_ties($week_id) {
  * Finalize week (now using tie-aware stats).
  */
 function kf_finalize_week_logic($week_id, $manual_winners = []) {
+    // Capture picks and matchups before scoring writes anything. Finalizing is where ties,
+    // BPOW second sets and Double Downs all interact, and it is the point past which a
+    // mistake is hardest to unpick.
+    if (function_exists('kf_snapshot_week')) { kf_snapshot_week($week_id, 'pre_finalize'); }
+
     global $wpdb;
 
     $weeks_table    = $wpdb->prefix . 'weeks';
@@ -383,6 +388,11 @@ function kf_finalize_week_logic($week_id, $manual_winners = []) {
  * Reverse week finalization (unchanged).
  */
 function kf_reverse_week($week_id) {
+    // Record the week before unwinding it. Reversal deletes scores and undoes Double Downs;
+    // if the reversal or the re-finalize that follows goes wrong, this is the only record of
+    // what the week looked like beforehand.
+    if ( function_exists( 'kf_snapshot_week' ) ) { kf_snapshot_week( $week_id, 'pre_reverse' ); }
+
     global $wpdb;
 
     $weeks_table  = $wpdb->prefix . 'weeks';
