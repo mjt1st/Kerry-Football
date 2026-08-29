@@ -18,6 +18,130 @@ if ( ! defined( 'ABSPATH' ) ) {
 // ============================================================
 
 /**
+ * Performs a GET against ESPN, rotating User-Agents until one is accepted.
+ *
+ * ESPN sits behind Akamai, which blocks by User-Agent and has repeatedly tightened what it
+ * allows. Observed so far: WordPress's default ("WordPress/6.x; https://site.com") has always
+ * been rejected; "PHP/<version>" and sending no User-Agent both worked in March 2026 and were
+ * blocked by August 2026. Any single hardcoded string is therefore a future outage, and that
+ * outage lands mid-season with no warning.
+ *
+ * So rather than pick another string, this tries a list. The first candidate that does not
+ * come back 403 is remembered in an option and used first from then on, so the normal path is
+ * still one request. Only a 403 rotates — other failures (500, timeout, rate limit) are
+ * returned as-is, since those are not User-Agent problems.
+ *
+ * Do NOT add a browser User-Agent to the list. A "Mozilla/..." string is rejected precisely
+ * because it is a lie: Akamai compares it against the TLS fingerprint of the PHP/cURL client,
+ * sees a browser claim that cannot be true, and treats it as an impersonating bot. Every
+ * candidate below is an honest identifier for an HTTP client library.
+ *
+ * @return string[] Candidate User-Agents, best guess first.
+ */
+function kf_espn_user_agents() {
+    $agents = [];
+
+    // A commissioner-supplied override goes first, so a future block can be worked around
+    // from the API settings page without waiting on a plugin update.
+    $custom = trim( (string) get_option( 'kf_espn_user_agent', '' ) );
+    if ( $custom !== '' ) {
+        $agents[] = $custom;
+    }
+
+    // Whichever candidate last succeeded, so the common case stays a single request.
+    $known = trim( (string) get_option( 'kf_espn_working_user_agent', '' ) );
+    if ( $known !== '' ) {
+        $agents[] = $known;
+    }
+
+    // Verified against ESPN on 2026-08-15.
+    $agents = array_merge( $agents, [
+        'curl/8.4.0',
+        'GuzzleHttp/7',
+        'python-requests/2.31.0',
+        'Go-http-client/1.1',
+        'okhttp/4.12.0',
+        'libwww-perl/6.67',
+    ] );
+
+    return array_values( array_unique( array_filter( $agents ) ) );
+}
+
+/**
+ * ESPN hostnames to try, in order.
+ *
+ * site.api.espn.com is the well-known host and stays primary. site.web.api.espn.com serves
+ * byte-identical payloads (verified 2026-08-24: same event IDs, same odds, same top-level
+ * keys) but is not behind the same Akamai bot ruleset — it accepted every User-Agent tested,
+ * including WordPress's own. It is the fallback rather than the default because it is the
+ * less-documented of the two and could plausibly be brought under the same rules later.
+ *
+ * @return string[]
+ */
+function kf_espn_hosts() {
+    return [ 'site.api.espn.com', 'site.web.api.espn.com' ];
+}
+
+/**
+ * @param string $url     Full ESPN URL.
+ * @param int    $timeout Request timeout in seconds.
+ * @return array|WP_Error Response array or WP_Error, as wp_remote_get().
+ */
+function kf_espn_remote_get( $url, $timeout = 15 ) {
+    $agents      = kf_espn_user_agents();
+    $known_agent = trim( (string) get_option( 'kf_espn_working_user_agent', '' ) );
+    $known_host  = trim( (string) get_option( 'kf_espn_working_host', '' ) );
+
+    $hosts = kf_espn_hosts();
+    if ( $known_host !== '' && in_array( $known_host, $hosts, true ) ) {
+        array_unshift( $hosts, $known_host );
+        $hosts = array_values( array_unique( $hosts ) );
+    }
+
+    $response = null;
+
+    foreach ( $hosts as $host ) {
+        $try_url = preg_replace( '#^https?://[^/]+#', 'https://' . $host, $url );
+
+        foreach ( $agents as $agent ) {
+            $response = wp_remote_get( $try_url, [
+                'timeout'    => $timeout,
+                'user-agent' => $agent,
+                'headers'    => [ 'Accept' => 'application/json' ],
+            ] );
+
+            // Transport failure: the request never landed, so a different User-Agent
+            // will not help. Return it rather than burning through the whole matrix.
+            if ( is_wp_error( $response ) ) {
+                return $response;
+            }
+
+            if ( wp_remote_retrieve_response_code( $response ) === 403 ) {
+                error_log( 'Kerry Football: ESPN refused User-Agent "' . $agent . '" on ' . $host . ' (403), trying next.' );
+                continue;
+            }
+
+            // Anything that is not a block is this request's answer, success or otherwise.
+            if ( $agent !== $known_agent ) {
+                update_option( 'kf_espn_working_user_agent', $agent, false );
+            }
+            if ( $host !== $known_host ) {
+                update_option( 'kf_espn_working_host', $host, false );
+            }
+            return $response;
+        }
+    }
+
+    // Every host/User-Agent combination was refused. Forget the remembered pair so the next
+    // call starts fresh instead of leading with one now known to be blocked.
+    delete_option( 'kf_espn_working_user_agent' );
+    delete_option( 'kf_espn_working_host' );
+    error_log( 'Kerry Football: every ESPN host and User-Agent combination was refused for ' . $url );
+
+    return $response;
+}
+
+/**
  * Fetches the scoreboard (game schedule) from ESPN for a given sport and week/date range.
  *
  * @param string $sport   'nfl' or 'college-football'
@@ -25,11 +149,22 @@ if ( ! defined( 'ABSPATH' ) ) {
  *                        ['dates' => 'YYYYMMDD'] for college football.
  * @return array|WP_Error Array of normalized game objects, or WP_Error on failure.
  */
-function kf_espn_fetch_scoreboard( $sport = 'nfl', $params = [] ) {
-    $base_url = "https://site.api.espn.com/apis/site/v2/sports/football/{$sport}/scoreboard";
-
-    // Build query params
+/**
+ * Builds the scoreboard URL for a sport, and with it the transient key.
+ *
+ * This exists because the key drifted: college fetches gained groups=80, which changes the
+ * URL and therefore the cache key, while the code clearing that cache still deleted the key
+ * for the bare URL. The cron dutifully cleared a cache nobody was reading and then read a
+ * stale one. Anything that builds or clears this cache must go through here.
+ *
+ * @param string $sport
+ * @param array  $params
+ * @return string
+ */
+function kf_espn_scoreboard_url( $sport = 'nfl', $params = [] ) {
+    $base  = "https://site.api.espn.com/apis/site/v2/sports/football/{$sport}/scoreboard";
     $query = [];
+
     if ( $sport === 'nfl' ) {
         if ( ! empty( $params['week'] ) ) {
             $query['week'] = intval( $params['week'] );
@@ -38,7 +173,6 @@ function kf_espn_fetch_scoreboard( $sport = 'nfl', $params = [] ) {
             $query['seasontype'] = intval( $params['seasontype'] );
         }
     } else {
-        // College football: filter by date or week
         if ( ! empty( $params['dates'] ) ) {
             $query['dates'] = sanitize_text_field( $params['dates'] );
         }
@@ -46,12 +180,32 @@ function kf_espn_fetch_scoreboard( $sport = 'nfl', $params = [] ) {
             $query['week'] = intval( $params['week'] );
         }
         if ( ! empty( $params['groups'] ) ) {
-            $query['groups'] = intval( $params['groups'] ); // Conference group ID
+            $query['groups'] = intval( $params['groups'] );
         }
-        $query['limit'] = 200; // College has many games
+        $query['limit'] = 200;
     }
 
-    $url = add_query_arg( $query, $base_url );
+    return add_query_arg( $query, $base );
+}
+
+/**
+ * Clears every cached scoreboard variant for a sport, so a forced refresh really is forced.
+ *
+ * @param string $sport
+ * @return void
+ */
+function kf_espn_clear_scoreboard_cache( $sport ) {
+    $variants = [ [] ];
+    if ( $sport === 'college-football' ) {
+        $variants[] = [ 'groups' => 80 ];
+    }
+    foreach ( $variants as $variant ) {
+        delete_transient( 'kf_espn_' . md5( kf_espn_scoreboard_url( $sport, $variant ) ) );
+    }
+}
+
+function kf_espn_fetch_scoreboard( $sport = 'nfl', $params = [] ) {
+    $url = kf_espn_scoreboard_url( $sport, $params );
 
     // Check transient cache (15-minute TTL)
     $cache_key = 'kf_espn_' . md5( $url );
@@ -60,10 +214,7 @@ function kf_espn_fetch_scoreboard( $sport = 'nfl', $params = [] ) {
         return $cached;
     }
 
-    $response = wp_remote_get( $url, [
-        'timeout' => 15,
-        'headers' => [ 'Accept' => 'application/json' ],
-    ] );
+    $response = kf_espn_remote_get( $url, 15 );
 
     if ( is_wp_error( $response ) ) {
         return $response;
@@ -72,7 +223,10 @@ function kf_espn_fetch_scoreboard( $sport = 'nfl', $params = [] ) {
     $code = wp_remote_retrieve_response_code( $response );
     if ( $code !== 200 ) {
         error_log( 'Kerry Football: ESPN API returned HTTP ' . $code . ' for URL: ' . $url );
-        return new WP_Error( 'espn_api_error', "ESPN API returned status {$code}" );
+        $message = ( $code === 403 )
+            ? 'ESPN refused every User-Agent this plugin knows (HTTP 403). Their CDN has tightened again — set a working one under API Settings; the error log lists what was tried.'
+            : "ESPN API returned status {$code}";
+        return new WP_Error( 'espn_api_error', $message );
     }
 
     $body = json_decode( wp_remote_retrieve_body( $response ), true );
@@ -240,7 +394,10 @@ function kf_espn_fetch_scores( $sport, $event_ids = [] ) {
     // ESPN scoreboard returns all games for the current week/day.
     // We fetch the full scoreboard and filter by our event IDs.
     // This is efficient because it's a single free call.
-    $scoreboard = kf_espn_fetch_scoreboard( $sport );
+    // College needs groups=80 (all FBS) or ESPN returns only its own default selection, so
+    // most of a league's games are missed here and fall through to one request per game.
+    $scoreboard_params = ( $sport === 'college-football' ) ? [ 'groups' => 80 ] : [];
+    $scoreboard = kf_espn_fetch_scoreboard( $sport, $scoreboard_params );
     if ( is_wp_error( $scoreboard ) ) {
         return [];
     }
@@ -273,6 +430,15 @@ function kf_espn_fetch_scores( $sport, $event_ids = [] ) {
  * @return array|null Normalized game array or null.
  */
 function kf_espn_fetch_single_event( $sport, $event_id ) {
+    // ESPN event ids are numeric. Validate before interpolating: this value reaches an
+    // outbound URL and a transient key, and it arrives from POST (link handler) and from the
+    // matchups table (cron), where a crafted hidden field could have stored anything.
+    $event_id = (string) $event_id;
+    if ( ! preg_match( '/^[0-9]{1,20}$/', $event_id ) ) {
+        error_log( 'Kerry Football: refusing non-numeric ESPN event id: ' . $event_id );
+        return null;
+    }
+
     $url = "https://site.api.espn.com/apis/site/v2/sports/football/{$sport}/summary?event={$event_id}";
 
     $cache_key = 'kf_espn_evt_' . $event_id;
@@ -281,7 +447,7 @@ function kf_espn_fetch_single_event( $sport, $event_id ) {
         return $cached;
     }
 
-    $response = wp_remote_get( $url, [ 'timeout' => 10 ] );
+    $response = kf_espn_remote_get( $url, 10 );
     if ( is_wp_error( $response ) || wp_remote_retrieve_response_code( $response ) !== 200 ) {
         return null;
     }
@@ -295,7 +461,10 @@ function kf_espn_fetch_single_event( $sport, $event_id ) {
     $competition = $body['header']['competitions'][0];
     $pseudo_event = [
         'id'           => $event_id,
-        'date'         => $body['header']['gameDate'] ?? '',
+        // ESPN's summary payload has no header.gameDate — the kickoff lives on the competition.
+        // Reading the wrong key silently stored an empty game_datetime for every game linked
+        // through the linker panel, which is why no kickoff times appeared.
+        'date'         => $competition['date'] ?? ( $body['header']['gameDate'] ?? '' ),
         'competitions' => [ $competition ],
     ];
 
@@ -322,7 +491,7 @@ function kf_espn_fetch_nfl_weeks() {
     }
 
     $url      = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard';
-    $response = wp_remote_get( $url, [ 'timeout' => 10 ] );
+    $response = kf_espn_remote_get( $url, 10 );
 
     if ( is_wp_error( $response ) || wp_remote_retrieve_response_code( $response ) !== 200 ) {
         return is_wp_error( $response ) ? $response : new WP_Error( 'espn_error', 'Failed to fetch NFL weeks' );
@@ -724,6 +893,178 @@ function kf_test_odds_api_connection() {
     } else {
         return [ 'success' => false, 'message' => "API returned status {$code}." ];
     }
+}
+
+
+/**
+ * Scores how well a stored team name matches one side of an ESPN game.
+ *
+ * Mirrors the client-side scorer in kf-game-browser.js so suggestions are ranked identically
+ * whichever path produced them. 0 means no relation; higher is better.
+ *
+ * @param string $typed Stored team name, e.g. "DAL Cowboys".
+ * @param array  $game  Normalized ESPN game from kf_normalize_espn_event().
+ * @param string $side  'home' or 'away'.
+ * @return int
+ */
+/**
+ * True when two single words plausibly name the same thing: identical, or one a prefix of
+ * the other. Prefix is what makes ok/oklahoma, wash/washington and st/state line up.
+ *
+ * @param string $a
+ * @param string $b
+ * @return bool
+ */
+function kf_espn_word_match( $a, $b ) {
+    if ( $a === '' || $b === '' ) {
+        return false;
+    }
+    if ( $a === $b ) {
+        return true;
+    }
+    return ( strlen( $a ) < strlen( $b ) )
+        ? ( strpos( $b, $a ) === 0 )
+        : ( strpos( $a, $b ) === 0 );
+}
+
+function kf_espn_name_score( $typed, $game, $side ) {
+    $normalize = static function ( $value ) {
+        $value = strtolower( (string) $value );
+        $value = preg_replace( '/[^a-z0-9 ]/', '', $value );
+        return trim( preg_replace( '/\s+/', ' ', $value ) );
+    };
+
+    $needle = $normalize( $typed );
+    if ( $needle === '' ) {
+        return 0;
+    }
+
+    $candidates = array_filter( [
+        $normalize( $game[ $side . '_abbr' ]  ?? '' ),
+        $normalize( $game[ $side . '_short' ] ?? '' ),
+        $normalize( $game[ $side . '_team' ]  ?? '' ),
+    ] );
+
+    foreach ( $candidates as $candidate ) {
+        if ( $candidate === $needle ) {
+            return 4;
+        }
+    }
+    foreach ( $candidates as $candidate ) {
+        if ( strpos( $candidate, $needle ) !== false || strpos( $needle, $candidate ) !== false ) {
+            return 2;
+        }
+    }
+
+    // Word-prefix match, the tier that rescues abbreviated names. ESPN writes "Oklahoma St"
+    // and "Washington St" where the league sheet says "OK STATE" and "WASH STATE" — same
+    // teams, no whole word in common, so every earlier tier scores zero. Here a word matches
+    // when one is a prefix of the other (ok/oklahoma, wash/washington, state/st), and the
+    // name matches only when EVERY word in the stored name finds a partner.
+    $needle_words = array_filter( explode( ' ', $needle ) );
+    foreach ( $candidates as $candidate ) {
+        $candidate_words = array_filter( explode( ' ', $candidate ) );
+        if ( empty( $candidate_words ) || empty( $needle_words ) ) {
+            continue;
+        }
+        $all_matched = true;
+        foreach ( $needle_words as $needle_word ) {
+            $matched = false;
+            foreach ( $candidate_words as $candidate_word ) {
+                if ( kf_espn_word_match( $needle_word, $candidate_word ) ) {
+                    $matched = true;
+                    break;
+                }
+            }
+            if ( ! $matched ) {
+                $all_matched = false;
+                break;
+            }
+        }
+        if ( $all_matched ) {
+            return 1;
+        }
+    }
+
+    // Mascot match: "pittsburgh steelers" vs "steelers".
+    $needle_parts = explode( ' ', $needle );
+    $needle_last  = end( $needle_parts );
+    foreach ( $candidates as $candidate ) {
+        $parts = explode( ' ', $candidate );
+        $last  = end( $parts );
+        if ( $needle_last && $last && $needle_last === $last && strlen( $needle_last ) > 3 ) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+
+/**
+ * Renders the "Link games to ESPN" panel.
+ *
+ * Shared by Week Setup and Enter Results. Enter Results is the important one: Manage Weeks
+ * only offers an "Edit" link for DRAFT weeks, so once a week is published there is no
+ * navigation to Week Setup at all — which is precisely when linking matters, because that is
+ * when picks exist and the normal save path is (correctly) blocked.
+ *
+ * The panel drives kf_espn_link_suggestions / kf_espn_apply_link, which UPDATE an existing
+ * matchup row in place. Nothing here submits a form or rewrites matchups.
+ *
+ * @param int $week_id     Week being worked on.
+ * @param int $week_number League week number, used as the default ESPN week.
+ * @return void
+ */
+function kf_render_espn_linker( $week_id, $week_number = 0 ) {
+    $week_id     = intval( $week_id );
+    $week_number = intval( $week_number );
+    if ( $week_id <= 0 ) {
+        return;
+    }
+    ?>
+    <div id="kf-espn-linker" class="kf-card" style="margin-top:1.25em;"
+         data-week-id="<?php echo esc_attr( $week_id ); ?>"
+         data-espn-week="<?php echo esc_attr( $week_number ); ?>">
+        <h3 style="margin-top:0;">&#128279; Link games to ESPN</h3>
+        <p class="kf-form-note" style="margin-top:0;">
+            Attaches each matchup to the real ESPN game so scores and results update by themselves.
+            This only adds the link &mdash; it never changes team names, never renumbers matchups and
+            never touches picks, so it is safe to use on a week that is already live.
+        </p>
+        <div style="display:flex;align-items:center;gap:0.75em;flex-wrap:wrap;">
+            <button type="button" id="kf-linker-find" class="kf-button">Find ESPN matches</button>
+            <label class="kf-form-note" style="margin:0;">ESPN week
+                <input type="number" id="kf-linker-week" min="1" max="25"
+                       value="<?php echo esc_attr( $week_number > 0 ? $week_number : 1 ); ?>"
+                       style="width:64px;margin-left:4px;">
+            </label>
+            <span id="kf-linker-status" class="kf-form-note" style="margin:0;"></span>
+        </div>
+        <div id="kf-linker-rows" style="margin-top:0.9em;"></div>
+    </div>
+    <?php
+}
+
+/**
+ * Whether matchups.status_detail exists yet.
+ *
+ * The column arrives with schema 1.3. Until that migration runs, writing to it makes the
+ * whole $wpdb->update() fail — which would take SCORES down with it, not just the clock.
+ * Score updating must never depend on a migration having completed, so every write of this
+ * field is gated on this check. Cached per request; the answer cannot change mid-request.
+ *
+ * @return bool
+ */
+function kf_matchups_have_status_detail() {
+    static $has_column = null;
+    if ( $has_column !== null ) {
+        return $has_column;
+    }
+    global $wpdb;
+    $columns    = $wpdb->get_col( "DESCRIBE {$wpdb->prefix}matchups", 0 );
+    $has_column = is_array( $columns ) && in_array( 'status_detail', $columns, true );
+    return $has_column;
 }
 
 // No closing PHP tag to prevent whitespace issues.
