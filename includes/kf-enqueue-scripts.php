@@ -71,14 +71,35 @@ function kf_enqueue_assets() {
                 $load_game_browser = true;
             }
         }
-        if ( $load_game_browser && current_user_can( 'manage_options' ) ) {
-            wp_enqueue_script(
-                'kerry-football-game-browser',
-                $plugin_base_url . 'assets/js/kf-game-browser.js',
-                [ 'jquery', 'kerry-football-main-js' ],
-                filemtime( KF_PLUGIN_PATH . 'assets/js/kf-game-browser.js' ),
-                true
+        if ( $load_game_browser ) {
+            // COMMISSIONER ACCESS FIX: this check must match the gate the shortcodes
+            // themselves use — kf_can_manage_season() — not current_user_can('manage_options').
+            // Gating on manage_options alone locked out co-commissioners
+            // (season_players.is_commissioner = 1): they received the page HTML but not this
+            // script, leaving the fetch-games UI and refresh-scores button dead. Same bug class
+            // as 52de52a. The AJAX handlers behind this script (kf_fetch_games,
+            // kf_refresh_scores) already use the commissioner helpers, so this only restores
+            // the front end to what the server already permits.
+            //
+            // The session is readable here: kf_start_session_early() runs on init priority 1,
+            // well before wp_enqueue_scripts. If no season is active yet, fall back to the
+            // season-less helper, which is what kf_ajax_fetch_games() uses.
+            $active_season_id = (int) ( $_SESSION['kf_active_season_id'] ?? 0 );
+            $can_use_game_browser = is_user_logged_in() && (
+                $active_season_id > 0
+                    ? kf_can_manage_season( $active_season_id )
+                    : kf_is_any_commissioner()
             );
+
+            if ( $can_use_game_browser ) {
+                wp_enqueue_script(
+                    'kerry-football-game-browser',
+                    $plugin_base_url . 'assets/js/kf-game-browser.js',
+                    [ 'jquery', 'kerry-football-main-js' ],
+                    filemtime( KF_PLUGIN_PATH . 'assets/js/kf-game-browser.js' ),
+                    true
+                );
+            }
         }
     }
 }
