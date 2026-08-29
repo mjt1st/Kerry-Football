@@ -424,6 +424,56 @@ function kf_week_summary_view() {
             </div>
             <div class="kf-table-wrapper">
                 <div class="kf-zoom-container">
+                    <?php
+                    // Compare toggle. Hidden while picks are concealed (pre-deadline for players),
+                    // since there is nothing to compare. Purely presentational: everything it does
+                    // happens in the browser against data attributes already on the cells.
+                    if ( ! $picks_are_hidden && count( $players ) > 1 ) :
+                    ?>
+                    <?php // Watches for score changes while the week is still running. ?>
+                    <?php if ( ! $is_finalized ) : ?>
+                        <div id="kf-week-live-watch" data-week-id="<?php echo esc_attr( $week->id ); ?>"></div>
+                    <?php endif; ?>
+                    <div class="kf-compare-bar" id="kf-compare-bar"
+                         data-current-player="<?php echo esc_attr( $current_user_id ); ?>">
+                        <span class="kf-compare-label">Compare</span>
+                        <div class="kf-compare-seg" role="group" aria-label="Pick comparison mode">
+                            <button type="button" class="kf-compare-btn" data-kf-mode="off" aria-pressed="true">Off</button>
+                            <button type="button" class="kf-compare-btn" data-kf-mode="vsyou" aria-pressed="false">vs You</button>
+                            <button type="button" class="kf-compare-btn" data-kf-mode="consensus" aria-pressed="false">Consensus</button>
+                        </div>
+
+                        <label class="kf-compare-toggle">
+                            <input type="checkbox" id="kf-compare-split-only">
+                            Split games only
+                        </label>
+
+                        <span class="kf-compare-who">
+                            <label for="kf-compare-target">Compare against</label>
+                            <select id="kf-compare-target">
+                                <?php foreach ( $players as $cmp_id => $cmp_name ) : ?>
+                                    <option value="<?php echo esc_attr( $cmp_id ); ?>" <?php selected( $cmp_id, $current_user_id ); ?>>
+                                        <?php echo esc_html( $cmp_name ); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </span>
+
+                        <span class="kf-view-controls">
+                            <label class="kf-compare-toggle" title="Hide the Points columns — halves the width of the table">
+                                <input type="checkbox" id="kf-view-hide-points"> Hide points
+                            </label>
+                            <label class="kf-compare-toggle" title="Show kickoff time or live score beside each game">
+                                <input type="checkbox" id="kf-view-detail" checked> Game detail
+                            </label>
+                            <label class="kf-compare-toggle" title="Tighter rows and smaller type">
+                                <input type="checkbox" id="kf-view-compact"> Compact
+                            </label>
+                        </span>
+                        <span class="kf-compare-legend" id="kf-compare-legend"></span>
+                    </div>
+                    <?php endif; ?>
+
                     <table class="kf-table" id="kf-summary-table">
                         <thead>
                             <tr>
@@ -494,7 +544,17 @@ function kf_week_summary_view() {
                                 }
                             ?>
                                 <tr class="<?php echo $m_is_live ? 'kf-row-live' : ''; ?>">
-                                    <td><?php echo esc_html($matchup->team_b . ' @ ' . $matchup->team_a); ?></td>
+                                    <td class="kf-game-cell">
+                                        <?php echo esc_html($matchup->team_b . ' @ ' . $matchup->team_a); ?>
+                                        <?php
+                                        // Kickoff only, and only once the game is under way or done. While a game is still
+                                        // scheduled the Winner column already shows its start time, and printing it in both
+                                        // places just made the row noisier without adding anything.
+                                        if ( $m_status !== 'scheduled' && ! empty( $matchup->game_datetime ) && $matchup->game_datetime !== '0000-00-00 00:00:00' ) :
+                                        ?>
+                                            <span class="kf-game-detail"><?php echo esc_html( get_date_from_gmt( $matchup->game_datetime, 'D g:i A' ) ); ?></span>
+                                        <?php endif; ?>
+                                    </td>
                                     <td class="kf-winner-cell">
                                         <?php
                                         if ($matchup->result !== null && $matchup->result !== '') {
@@ -505,6 +565,10 @@ function kf_week_summary_view() {
                                             }
                                         } elseif ($m_is_live && $m_has_scores) {
                                             echo '<span class="kf-live-badge">LIVE</span>';
+                                            // Quarter and clock belong with the live state, not with the fixture.
+                                            if ( ! empty( $matchup->status_detail ) ) {
+                                                echo '<span class="kf-live-clock">' . esc_html( $matchup->status_detail ) . '</span>';
+                                            }
                                             echo '<span class="kf-live-score-display">';
                                             echo esc_html($matchup->team_b) . ' <strong>' . $m_as . '</strong>';
                                             echo ' &ndash; ';
@@ -512,6 +576,10 @@ function kf_week_summary_view() {
                                             echo '</span>';
                                         } elseif ($m_is_live) {
                                             echo '<span class="kf-live-badge">LIVE</span>';
+                                            // Quarter and clock belong with the live state, not with the fixture.
+                                            if ( ! empty( $matchup->status_detail ) ) {
+                                                echo '<span class="kf-live-clock">' . esc_html( $matchup->status_detail ) . '</span>';
+                                            }
                                         } elseif ($m_status === 'scheduled' && !empty($matchup->game_datetime)) {
                                             try {
                                                 $utc_dt = new DateTime($matchup->game_datetime, new DateTimeZone('UTC'));
@@ -566,8 +634,10 @@ function kf_week_summary_view() {
                                             $pick_with_mark = $pick;
                                         }
                                         ?>
-                                        <td class="<?php echo $class; ?> kf-pick-cell <?php echo $highlight_class; ?>"><?php echo $pick_with_mark; ?></td>
-                                        <td class="<?php echo $class; ?> kf-points-cell <?php echo $highlight_class; ?>"><?php echo $display_points; ?></td>
+                                        <?php // data-kf-pick / data-kf-player drive the Compare toggle. The RAW pick is stored, not the
+                                              // display string, so a tie dash or live tint never changes what counts as the same pick. ?>
+                                        <td class="<?php echo $class; ?> kf-pick-cell <?php echo $highlight_class; ?>" data-kf-player="<?php echo esc_attr($player_id); ?>" data-kf-pick="<?php echo $pick_data ? esc_attr(trim($pick_data->pick)) : ''; ?>"><?php echo $pick_with_mark; ?></td>
+                                        <td class="<?php echo $class; ?> kf-points-cell <?php echo $highlight_class; ?>" data-kf-player="<?php echo esc_attr($player_id); ?>"><?php echo $display_points; ?></td>
                                     <?php endforeach; ?>
                                     <?php if ($last_week_bpow_winner_id && !$picks_are_hidden):
                                         $highlight_class = ($last_week_bpow_winner_id == $current_user_id) ? 'kf-current-player-col' : '';
@@ -626,12 +696,20 @@ function kf_week_summary_view() {
                                             }
                                         } elseif ($tb_is_live && $tb_has_scores) {
                                             echo '<span class="kf-live-badge">LIVE</span>';
+                                            // Quarter and clock belong with the live state, not with the fixture.
+                                            if ( ! empty( $matchup->status_detail ) ) {
+                                                echo '<span class="kf-live-clock">' . esc_html( $matchup->status_detail ) . '</span>';
+                                            }
                                             echo '<span class="kf-live-score-display">';
                                             echo esc_html($tiebreaker_matchup->team_b) . ' ' . $tb_as . ' &ndash; ' . $tb_hs . ' ' . esc_html($tiebreaker_matchup->team_a);
                                             echo ' <em class="kf-live-combined">Combined: ' . $tb_live_total . '</em>';
                                             echo '</span>';
                                         } elseif ($tb_is_live) {
                                             echo '<span class="kf-live-badge">LIVE</span>';
+                                            // Quarter and clock belong with the live state, not with the fixture.
+                                            if ( ! empty( $matchup->status_detail ) ) {
+                                                echo '<span class="kf-live-clock">' . esc_html( $matchup->status_detail ) . '</span>';
+                                            }
                                         } elseif ($tb_status === 'scheduled' && !empty($tiebreaker_matchup->game_datetime)) {
                                             try {
                                                 $utc_dt = new DateTime($tiebreaker_matchup->game_datetime, new DateTimeZone('UTC'));
@@ -873,6 +951,10 @@ function kf_week_summary_view() {
                     </div>
                 <?php endforeach; ?>
             </div>
+            <div class="kf-scenario-actions">
+                <button type="button" class="kf-button kf-button-secondary" id="kf-scenario-reset">Reset outcomes</button>
+                <span class="kf-scenario-status" id="kf-scenario-status"></span>
+            </div>
             <div class="kf-scenario-standings" id="kf-scenario-standings" style="display:none;">
                 <h4 class="kf-scenario-standings-title">&#128202; Projected Standings</h4>
                 <table class="kf-scenario-table">
@@ -881,7 +963,7 @@ function kf_week_summary_view() {
                             <th>#</th>
                             <th>Player</th>
                             <th>Proj. Pts</th>
-                            <th>vs Now</th>
+                            <th id="kf-scenario-vsnow-head">vs Now</th>
                         </tr>
                     </thead>
                     <tbody id="kf-scenario-tbody"></tbody>
@@ -895,7 +977,12 @@ function kf_week_summary_view() {
             players:  <?php echo wp_json_encode($js_sim_players); ?>,
             matchups: <?php echo wp_json_encode($js_sim_matchups); ?>,
             picks:    <?php echo wp_json_encode($js_sim_picks); ?>,
-            current:  <?php echo wp_json_encode($js_sim_current); ?>
+            current:  <?php echo wp_json_encode($js_sim_current); ?>,
+            // How many games already carry a real result. With none, there is no meaningful "now"
+            // to compare a projection against, so the vs Now column is suppressed rather than
+            // showing a delta against zero — which just repeated the projection with a plus sign.
+            resolved: <?php echo intval( count( $regular_matchups ) - $unresolved_count ); ?>,
+            openGames: <?php echo intval( $unresolved_count ); ?>
         };
 
         function kfScenarioOpen() {
@@ -956,6 +1043,34 @@ function kf_week_summary_view() {
             });
             standings.sort(function(a, b) { return b.projected - a.projected; });
 
+            // How much of the week this projection actually covers. Without this the table
+            // looked broken: choose one outcome and everyone outside that game shows 0, with
+            // nothing on screen saying the other games simply have no outcome yet.
+            var chosen = 0;
+            document.querySelectorAll('.kf-scenario-select').forEach(function(sel) {
+                if (sel.value) { chosen++; }
+            });
+            var covered = KF_SIM.resolved + chosen;
+            var totalGames = KF_SIM.resolved + KF_SIM.openGames;
+
+            var statusEl = document.getElementById('kf-scenario-status');
+            if (statusEl) {
+                if (covered === 0) {
+                    statusEl.textContent = 'Pick an outcome above to project the standings.';
+                } else if (covered < totalGames) {
+                    statusEl.textContent = covered + ' of ' + totalGames + ' games accounted for \u2014 ' +
+                        (totalGames - covered) + ' with no outcome yet, counting 0 here.';
+                } else {
+                    statusEl.textContent = 'All ' + totalGames + ' games accounted for.';
+                }
+            }
+
+            // With nothing scored yet, "now" is zero for everyone and the delta merely repeats
+            // the projection with a plus sign. Hide the column instead of showing noise.
+            var showDelta = KF_SIM.resolved > 0;
+            var vsNowHead = document.getElementById('kf-scenario-vsnow-head');
+            if (vsNowHead) { vsNowHead.style.display = showDelta ? '' : 'none'; }
+
             // Render the standings table
             var tbody = document.getElementById('kf-scenario-tbody');
             tbody.innerHTML = '';
@@ -971,12 +1086,29 @@ function kf_week_summary_view() {
                     '<td>' + (i + 1) + '</td>' +
                     '<td>' + safeName + '</td>' +
                     '<td><strong>' + p.projected + '</strong></td>' +
-                    '<td><span class="kf-scenario-delta ' + deltaClass + '">' + deltaStr + '</span></td>';
+                    (showDelta ? '<td><span class="kf-scenario-delta ' + deltaClass + '">' + deltaStr + '</span></td>' : '');
                 tbody.appendChild(tr);
             });
 
             document.getElementById('kf-scenario-standings').style.display = 'block';
         };
+
+        // Reset clears every hypothetical outcome and hides the projection again. Locked
+        // games are untouched: they are real results, not part of the what-if.
+        var resetBtn = document.getElementById('kf-scenario-reset');
+        if (resetBtn) {
+            resetBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                document.querySelectorAll('.kf-scenario-select').forEach(function(sel) { sel.value = ''; });
+                if (KF_SIM.resolved > 0) {
+                    window.kfScenarioCompute();
+                } else {
+                    document.getElementById('kf-scenario-standings').style.display = 'none';
+                    var st = document.getElementById('kf-scenario-status');
+                    if (st) { st.textContent = 'Pick an outcome above to project the standings.'; }
+                }
+            });
+        }
     })();
     </script>
     <?php endif; // end scenario simulator ?>

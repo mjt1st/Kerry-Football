@@ -429,3 +429,346 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 });
+/* =========================================================================
+ * Week Summary — Pick Compare
+ *
+ * Highlights where players disagreed, either against one chosen player or
+ * against the field. Entirely presentational: it reads data-kf-pick /
+ * data-kf-player attributes already rendered on the cells, writes only CSS
+ * classes, and sends nothing to the server.
+ *
+ * The highlight works in OUTLINE and OPACITY, never background colour. The
+ * summary table already uses background to mean win, loss, tie and live —
+ * a second background layer would destroy that reading.
+ * ========================================================================= */
+(function () {
+    'use strict';
+
+    document.addEventListener('DOMContentLoaded', function () {
+        var bar   = document.getElementById('kf-compare-bar');
+        var table = document.getElementById('kf-summary-table');
+        if (!bar || !table) { return; }
+
+        var legendEl  = document.getElementById('kf-compare-legend');
+        var targetSel = document.getElementById('kf-compare-target');
+        var splitOnly = document.getElementById('kf-compare-split-only');
+        var buttons   = bar.querySelectorAll('.kf-compare-btn');
+
+        var mode   = 'off';
+        var target = targetSel ? targetSel.value : bar.getAttribute('data-current-player');
+
+        // Only rows carrying pick cells take part. The tiebreaker row is rendered separately
+        // and has none, so it is excluded without needing a special case.
+        function comparableRows() {
+            return Array.prototype.filter.call(
+                table.querySelectorAll('tbody tr'),
+                function (tr) { return tr.querySelector('td.kf-pick-cell[data-kf-pick]'); }
+            );
+        }
+
+        function pickCells(tr) {
+            // BPOW columns are a second pick set for one player and are not comparable
+            // against everyone else's single set, so they stay out of it.
+            return Array.prototype.filter.call(
+                tr.querySelectorAll('td.kf-pick-cell[data-kf-pick]'),
+                function (td) { return !td.classList.contains('kf-bpow-column'); }
+            );
+        }
+
+        function clear() {
+            table.querySelectorAll('.kf-cmp-diff, .kf-cmp-same, .kf-cmp-minority, .kf-cmp-majority')
+                .forEach(function (el) {
+                    el.classList.remove('kf-cmp-diff', 'kf-cmp-same', 'kf-cmp-minority', 'kf-cmp-majority');
+                });
+            table.querySelectorAll('.kf-cmp-meter').forEach(function (el) { el.remove(); });
+            comparableRows().forEach(function (tr) {
+                tr.classList.remove('kf-cmp-unanimous', 'kf-cmp-hidden');
+            });
+        }
+
+        function pointsCellFor(td) {
+            var next = td.nextElementSibling;
+            return (next && next.classList.contains('kf-points-cell')) ? next : null;
+        }
+
+        function apply() {
+            clear();
+            table.setAttribute('data-kf-compare', mode);
+            if (mode === 'off') { renderLegend(); return; }
+
+            comparableRows().forEach(function (tr) {
+                var cells = pickCells(tr);
+                if (!cells.length) { return; }
+
+                var counts = {};
+                cells.forEach(function (td) {
+                    var v = td.getAttribute('data-kf-pick');
+                    if (v) { counts[v] = (counts[v] || 0) + 1; }
+                });
+
+                var teams = Object.keys(counts);
+                var unanimous = teams.length <= 1;
+                if (unanimous) { tr.classList.add('kf-cmp-unanimous'); }
+
+                var topCount = 0;
+                teams.forEach(function (t) { if (counts[t] > topCount) { topCount = counts[t]; } });
+
+                var reference = null;
+                if (mode === 'vsyou') {
+                    for (var i = 0; i < cells.length; i++) {
+                        if (cells[i].getAttribute('data-kf-player') === String(target)) {
+                            reference = cells[i].getAttribute('data-kf-pick');
+                            break;
+                        }
+                    }
+                }
+
+                cells.forEach(function (td) {
+                    var value = td.getAttribute('data-kf-pick');
+                    var pts   = pointsCellFor(td);
+                    var isRef = td.getAttribute('data-kf-player') === String(target);
+
+                    if (mode === 'vsyou') {
+                        if (!reference || isRef || !value) { return; }
+                        if (value === reference) {
+                            td.classList.add('kf-cmp-same');
+                            if (pts) { pts.classList.add('kf-cmp-same'); }
+                        } else {
+                            td.classList.add('kf-cmp-diff');
+                        }
+                    } else {
+                        if (!value) { return; }
+                        if (unanimous || counts[value] === topCount) {
+                            td.classList.add('kf-cmp-majority');
+                            if (pts) { pts.classList.add('kf-cmp-majority'); }
+                        } else {
+                            td.classList.add('kf-cmp-minority');
+                        }
+                    }
+                });
+
+                if (mode === 'consensus') {
+                    var firstCell = tr.querySelector('td');
+                    if (firstCell && !firstCell.querySelector('.kf-cmp-meter')) {
+                        var meter = document.createElement('div');
+                        meter.className = 'kf-cmp-meter';
+
+                        var bar2 = document.createElement('div');
+                        bar2.className = 'kf-cmp-bar';
+                        var fill = document.createElement('i');
+                        fill.style.width = Math.round((topCount / cells.length) * 100) + '%';
+                        bar2.appendChild(fill);
+
+                        var txt = document.createElement('span');
+                        txt.className = 'kf-cmp-split';
+                        if (unanimous) {
+                            txt.textContent = 'unanimous';
+                            txt.classList.add('kf-cmp-split-flat');
+                        } else {
+                            txt.textContent = teams.map(function (t) { return counts[t]; })
+                                                   .sort(function (a, b) { return b - a; })
+                                                   .join('–') + ' split';
+                        }
+
+                        meter.appendChild(bar2);
+                        meter.appendChild(txt);
+                        firstCell.appendChild(meter);
+                    }
+                }
+            });
+
+            applySplitFilter();
+            renderLegend();
+        }
+
+        function applySplitFilter() {
+            var on = splitOnly && splitOnly.checked && mode !== 'off';
+            comparableRows().forEach(function (tr) {
+                tr.classList.toggle('kf-cmp-hidden', on && tr.classList.contains('kf-cmp-unanimous'));
+            });
+        }
+
+        function renderLegend() {
+            if (!legendEl) { return; }
+            if (mode === 'off') { legendEl.textContent = ''; return; }
+            var diffLabel = mode === 'vsyou' ? 'Picked differently' : 'Minority pick';
+            var sameLabel = mode === 'vsyou' ? 'Same as you' : 'With the majority';
+            legendEl.innerHTML =
+                '<span class="kf-cmp-key"><i class="kf-cmp-sw kf-cmp-sw-diff"></i>' + diffLabel + '</span>' +
+                '<span class="kf-cmp-key"><i class="kf-cmp-sw kf-cmp-sw-same"></i>' + sameLabel + '</span>';
+        }
+
+        buttons.forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                mode = btn.getAttribute('data-kf-mode');
+                buttons.forEach(function (b) {
+                    b.setAttribute('aria-pressed', b === btn ? 'true' : 'false');
+                });
+                apply();
+            });
+        });
+
+        if (targetSel) {
+            targetSel.addEventListener('change', function () {
+                target = targetSel.value;
+                if (mode !== 'off') { apply(); }
+            });
+        }
+
+        if (splitOnly) {
+            splitOnly.addEventListener('change', applySplitFilter);
+        }
+    });
+})();
+
+/* =========================================================================
+ * Week Summary — view controls
+ *
+ * Three levers on a table that gets very wide with ten players:
+ *   Hide points  — drops the Points column for every player, roughly halving
+ *                  the width. The single biggest win available.
+ *   Game detail  — kickoff time / live score beside each game.
+ *   Compact      — tighter padding and smaller type.
+ *
+ * Choices persist per browser in localStorage, wrapped in try/catch because
+ * private windows and locked-down browsers throw on access.
+ * ========================================================================= */
+(function () {
+    'use strict';
+
+    document.addEventListener('DOMContentLoaded', function () {
+        var table = document.getElementById('kf-summary-table');
+        if (!table) { return; }
+
+        var hidePoints = document.getElementById('kf-view-hide-points');
+        var showDetail = document.getElementById('kf-view-detail');
+        var compact    = document.getElementById('kf-view-compact');
+        if (!hidePoints && !showDetail && !compact) { return; }
+
+        var KEY = 'kfWeekSummaryView';
+
+        function load() {
+            try {
+                var raw = window.localStorage.getItem(KEY);
+                return raw ? JSON.parse(raw) : {};
+            } catch (e) { return {}; }
+        }
+
+        function save(state) {
+            try { window.localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* not fatal */ }
+        }
+
+        function apply() {
+            var state = {
+                hidePoints: !!(hidePoints && hidePoints.checked),
+                detail:     !!(showDetail && showDetail.checked),
+                compact:    !!(compact && compact.checked)
+            };
+            table.classList.toggle('kf-hide-points', state.hidePoints);
+            table.classList.toggle('kf-hide-detail', !state.detail);
+            table.classList.toggle('kf-compact', state.compact);
+
+            // The player header spans Pick + Points; with Points hidden it spans one.
+            table.querySelectorAll('thead th[colspan="2"]').forEach(function (th) {
+                th.setAttribute('colspan', state.hidePoints ? '1' : '2');
+            });
+
+            save(state);
+        }
+
+        var saved = load();
+        if (hidePoints && typeof saved.hidePoints === 'boolean') { hidePoints.checked = saved.hidePoints; }
+        if (showDetail && typeof saved.detail === 'boolean')     { showDetail.checked = saved.detail; }
+        if (compact && typeof saved.compact === 'boolean')       { compact.checked = saved.compact; }
+
+        [hidePoints, showDetail, compact].forEach(function (input) {
+            if (input) { input.addEventListener('change', apply); }
+        });
+
+        apply();
+    });
+})();
+
+/* =========================================================================
+ * Week Summary — score change notice
+ *
+ * Scores land in the database from the cron; the page a viewer is looking at
+ * is static HTML and knows nothing about it. This polls a cheap fingerprint
+ * endpoint and, when the week's results actually change, offers a Reload.
+ *
+ * It deliberately does NOT re-render the table itself. Win/loss tinting, live
+ * subtotals, the compare overlay and the scenario tool are all derived from
+ * the same results; patching some of them and not others produces a page that
+ * quietly disagrees with itself. A reload is honest and cheap.
+ *
+ * Polling pauses while the tab is hidden, so a forgotten tab costs nothing.
+ * ========================================================================= */
+(function () {
+    'use strict';
+
+    document.addEventListener('DOMContentLoaded', function () {
+        var host = document.getElementById('kf-week-live-watch');
+        if (!host || typeof kf_ajax_data === 'undefined') { return; }
+
+        var weekId = host.getAttribute('data-week-id');
+        if (!weekId) { return; }
+
+        var INTERVAL = 60000;   // once a minute is plenty against a 15-minute cron
+        var known = null;
+        var timer = null;
+
+        function showNotice(info) {
+            if (document.getElementById('kf-live-notice')) { return; }
+            var bar = document.createElement('div');
+            bar.id = 'kf-live-notice';
+            bar.className = 'kf-live-notice';
+            bar.innerHTML =
+                '<span>Scores have changed &mdash; ' + parseInt(info.resolved, 10) + ' of ' +
+                parseInt(info.total, 10) + ' games now have a result.</span>' +
+                '<button type="button" class="kf-button kf-button-action" id="kf-live-reload">Reload</button>';
+            host.appendChild(bar);
+            document.getElementById('kf-live-reload').addEventListener('click', function () {
+                window.location.reload();
+            });
+        }
+
+        function poll() {
+            if (document.hidden) { return; }
+
+            var fd = new FormData();
+            fd.append('action', 'kf_week_state');
+            fd.append('nonce', kf_ajax_data.nonce);
+            fd.append('week_id', weekId);
+
+            fetch(kf_ajax_data.ajax_url, { method: 'POST', body: fd })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (!res || !res.success) { return; }
+                    if (known === null) { known = res.data.fingerprint; return; }
+                    if (res.data.fingerprint !== known) {
+                        known = res.data.fingerprint;
+                        showNotice(res.data);
+                        stop();   // one notice is enough; the reload picks up everything
+                    }
+                })
+                .catch(function () { /* transient network trouble is not worth surfacing */ });
+        }
+
+        function start() {
+            if (timer) { return; }
+            timer = window.setInterval(poll, INTERVAL);
+            poll();
+        }
+
+        function stop() {
+            if (timer) { window.clearInterval(timer); timer = null; }
+        }
+
+        document.addEventListener('visibilitychange', function () {
+            if (document.hidden) { stop(); } else { start(); }
+        });
+
+        start();
+    });
+})();

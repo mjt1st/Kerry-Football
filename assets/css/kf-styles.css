@@ -1736,3 +1736,275 @@
 .kf-empty-state .kf-empty-icon { font-size: 3em; margin-bottom: 12px; }
 .kf-empty-state h3 { color: #374151; border: none; margin-top: 0; }
 .kf-empty-state p { margin: 8px 0 20px; }
+
+/* --- Game browser: already-added state --- */
+/* Cards use inline styles for layout-critical properties (theme CSS was breaking the
+   layout), so these overrides need !important to win against the element style. */
+.kf-game-card.kf-game-added {
+    background: #f9fafb !important;
+    border-color: #d1d5db !important;
+    opacity: 0.62;
+    cursor: default !important;
+}
+.kf-game-card.kf-game-added:hover { border-color: #d1d5db !important; }
+.kf-game-card.kf-game-added .kf-game-checkbox { cursor: not-allowed; }
+.kf-added-badge {
+    margin-left: 8px;
+    flex-shrink: 0;
+    font-size: 0.74em;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 99px;
+    background: #dcfce7;
+    color: #166534;
+    white-space: nowrap;
+}
+
+/* --- Game browser: collapsed panel --- */
+/* Hide every child except the heading, so the Matchups list below is reachable without
+   scrolling past the full game list. A class is used rather than inline display toggling
+   so children keep their own visibility logic (conference/division groups vary by sport). */
+#kf-game-browser.kf-browser-collapsed > *:not(h3) { display: none !important; }
+#kf-game-browser.kf-browser-collapsed { padding-bottom: 8px; }
+#kf-game-browser.kf-browser-collapsed h3 { margin-bottom: 0; }
+
+/* --- Week profile (commissioner running stats in the setup header) --- */
+.kf-week-profile-body {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 2px;
+    min-height: 30px;
+    align-items: center;
+}
+.kf-profile-stat {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 99px;
+    font-size: 0.82em;
+    white-space: nowrap;
+}
+.kf-profile-stat-label { opacity: 0.75; font-size: 0.9em; }
+.kf-profile-empty { color: #9ca3af; font-size: 0.85em; font-style: italic; }
+.kf-week-profile-alerts:empty { display: none; }
+.kf-profile-alert {
+    margin-top: 10px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: #fef3c7;
+    border-left: 4px solid #d97706;
+    color: #92400e;
+    font-size: 0.86em;
+    font-weight: 600;
+}
+
+/* --- Week setup: pinned header + self-scrolling game list --- */
+/* The setup page is tall (week fields, then a full ESPN game list, then the matchups).
+   Pinning the header keeps the week number, counts, deadline and profile visible while
+   picking games, and capping the game list keeps the Matchups section reachable. */
+.kf-week-sticky-header {
+    position: sticky;
+    top: 0;
+    z-index: 30;                 /* above the sticky selected-count bar (z-index 10) */
+    background: #fff;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07);
+}
+/* Clear the WordPress admin bar, which is fixed over the top of the page for logged-in users. */
+body.admin-bar .kf-week-sticky-header { top: 32px; }
+@media screen and (max-width: 782px) {
+    body.admin-bar .kf-week-sticky-header { top: 46px; }
+}
+/* On short screens a pinned header costs more than it gives. */
+@media screen and (max-height: 620px) {
+    .kf-week-sticky-header { position: static; box-shadow: none; }
+}
+
+#kf-games-list {
+    max-height: 58vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;  /* stop scroll chaining to the page at the ends */
+    padding-right: 6px;
+}
+
+/* --- Linking a manual matchup to a real ESPN game --- */
+.kf-espn-link-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed #e5e7eb;
+}
+.kf-espn-link-row:empty { display: none; }
+.kf-espn-hint  { font-size: 0.8em; color: #6b7280; }
+.kf-espn-linked {
+    font-size: 0.78em; font-weight: 700; padding: 2px 9px; border-radius: 99px;
+    background: #dcfce7; color: #166534; white-space: nowrap;
+}
+.kf-linkish {
+    font-size: 0.78em;
+    padding: 3px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 99px;
+    background: #fff;
+    color: #1e40af;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.kf-linkish:hover { background: #eff6ff; border-color: #93c5fd; }
+.kf-espn-pick-when { color: #6b7280; }
+
+/* --- ESPN link-only panel (works on live weeks) --- */
+.kf-linker-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid #f3f4f6;
+}
+.kf-linker-row:last-child { border-bottom: none; }
+.kf-linker-teams { min-width: 210px; font-size: 0.9em; }
+
+/* --- Week summary: pick comparison ---------------------------------------
+   The summary table already encodes win / loss / tie / live in background
+   colour. This layer therefore works only in OUTLINE and OPACITY so both
+   readings survive at once. Never add a background fill here. */
+.kf-compare-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    background: #f4f6fa;
+    border: 1px solid #d9e0ea;
+    border-radius: 7px;
+}
+.kf-compare-label {
+    font-size: 0.78em;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #5d6879;
+}
+.kf-compare-seg { display: flex; border: 1px solid #d9e0ea; border-radius: 999px; overflow: hidden; background: #fff; }
+.kf-compare-btn {
+    font-size: 0.86em;
+    font-weight: 600;
+    padding: 8px 15px;
+    border: 0;
+    background: transparent;
+    color: #5d6879;
+    cursor: pointer;
+}
+.kf-compare-btn + .kf-compare-btn { border-left: 1px solid #d9e0ea; }
+.kf-compare-btn:hover { background: #eaeef5; color: #121821; }
+.kf-compare-btn[aria-pressed="true"] { background: var(--kf-primary-color, #1a4b8c); color: #fff; }
+.kf-compare-btn:focus-visible { outline: 2px solid #b8460e; outline-offset: -2px; }
+
+.kf-compare-toggle { display: inline-flex; align-items: center; gap: 7px; font-size: 0.88em; color: #5d6879; cursor: pointer; }
+.kf-compare-who { display: inline-flex; align-items: center; gap: 7px; font-size: 0.86em; color: #5d6879; }
+.kf-compare-who select { padding: 6px 9px; border: 1px solid #d9e0ea; border-radius: 6px; background: #fff; }
+.kf-compare-legend { display: inline-flex; flex-wrap: wrap; gap: 14px; margin-left: auto; font-size: 0.82em; color: #5d6879; }
+.kf-cmp-key { display: inline-flex; align-items: center; gap: 6px; }
+.kf-cmp-sw { width: 22px; height: 15px; border-radius: 3px; border: 1px solid #d9e0ea; background: #eef2f7; display: inline-block; }
+.kf-cmp-sw-diff { border: 2px solid #e8874f; background: #fdf0e7; }
+.kf-cmp-sw-same { opacity: 0.38; }
+
+/* The highlight itself */
+#kf-summary-table td.kf-cmp-same,
+#kf-summary-table td.kf-cmp-majority { opacity: 0.38; }
+
+#kf-summary-table td.kf-cmp-diff,
+#kf-summary-table td.kf-cmp-minority {
+    box-shadow: inset 0 0 0 2px #e8874f;
+    color: #b8460e;
+    font-weight: 700;
+}
+#kf-summary-table td.kf-cmp-diff::after { content: " \2260"; opacity: 0.7; }
+#kf-summary-table td.kf-cmp-minority::after { content: " \25C2"; opacity: 0.6; }
+
+#kf-summary-table tr.kf-cmp-hidden { display: none; }
+
+.kf-cmp-meter { display: flex; align-items: center; gap: 7px; margin-top: 4px; }
+.kf-cmp-bar { flex: 0 0 84px; height: 5px; border-radius: 3px; background: #e3e8f0; overflow: hidden; }
+.kf-cmp-bar i { display: block; height: 100%; background: var(--kf-primary-color, #1a4b8c); }
+.kf-cmp-split { font-size: 0.74em; letter-spacing: 0.04em; color: #6b7280; white-space: nowrap; }
+.kf-cmp-split-flat { opacity: 0.65; }
+
+@media (max-width: 700px) {
+    .kf-compare-legend { margin-left: 0; width: 100%; }
+}
+
+/* --- Scenario simulator: actions row --- */
+.kf-scenario-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin: 10px 0 4px;
+}
+.kf-scenario-status { font-size: 0.85em; color: #6b7280; }
+.kf-scenario-locked { opacity: 0.62; font-style: italic; }
+
+/* Kickoff time under the game name on Enter Results */
+.kf-kickoff { font-size: 0.82em; color: #6b7280; letter-spacing: 0.01em; }
+
+/* --- Week summary: view controls (width + density) --- */
+.kf-view-controls { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+
+/* Hide points: the single biggest width saving on a ten-player table. */
+#kf-summary-table.kf-hide-points td.kf-points-cell,
+#kf-summary-table.kf-hide-points th.kf-points-cell { display: none; }
+
+#kf-summary-table.kf-hide-detail .kf-game-detail { display: none; }
+
+.kf-game-cell { line-height: 1.35; }
+.kf-game-detail {
+    display: block;
+    font-size: 0.78em;
+    color: #6b7280;
+    letter-spacing: 0.01em;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Compact density */
+#kf-summary-table.kf-compact { font-size: 0.86em; }
+#kf-summary-table.kf-compact td,
+#kf-summary-table.kf-compact th { padding-top: 4px; padding-bottom: 4px; }
+#kf-summary-table.kf-compact .kf-game-detail { font-size: 0.74em; }
+
+/* --- Week summary: score change notice --- */
+.kf-live-notice {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    background: #dcf3e3;
+    border: 1px solid #86c9a3;
+    border-left: 4px solid #1c6136;
+    border-radius: 6px;
+    color: #14532d;
+    font-size: 0.9em;
+}
+
+/* Quarter + clock on live games */
+.kf-status-clock { display: inline-block; margin-top: 2px; font-size: 0.8em; color: #b45309; font-weight: 600; letter-spacing: 0.02em; }
+
+/* Quarter + clock beside the LIVE badge in the Winner column */
+.kf-live-clock {
+    display: inline-block;
+    margin: 0 8px 0 6px;
+    font-size: 0.82em;
+    font-weight: 700;
+    color: #b45309;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
