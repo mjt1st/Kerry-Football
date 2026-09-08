@@ -6,7 +6,7 @@ A WordPress plugin for running a **private fantasy-football pick'em league**. Pl
 
 - **Repo root:** `Kerry Football\Code\kerry-football-admin` (this folder is the plugin directory and the git root)
 - **Remote:** `github.com/mjt1st/Kerry-Football`, branch `main`
-- **Version:** `1.8.2` (plugin header in `kerry-football-admin.php`)
+- **Version:** `1.8.3` (plugin header in `kerry-football-admin.php`)
 - **DB schema version:** `1.3` (WP option `kf_db_version`)
 - **Author line:** `Kerry/Gemini` — much of the codebase was written by Gemini; comments carry version tags like `V2.1.6`, `SPORTS API V1`, `LATE PICKS V2.1` that do **not** match the plugin version. Treat them as change markers, not versions.
 

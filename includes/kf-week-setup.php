@@ -706,8 +706,27 @@ function kf_week_setup_form() {
                 matchupsContainer.appendChild(createMatchupFieldset(currentCount));
                 currentCount++;
             }
-            while(currentCount > desiredCount) {
-                matchupsContainer.removeChild(matchupsContainer.lastChild);
+            // Trim from the end, but only BLANK fieldsets, and by removing the fieldset itself
+            // rather than lastChild. Two reasons:
+            //  - The PHP-rendered markup has whitespace text nodes between fieldsets, so
+            //    removeChild(lastChild) deleted a newline and left the matchup in place. The
+            //    declared count and the visible matchups drifted apart, and running the
+            //    container empty eventually called removeChild(null), which throws.
+            //  - A filled fieldset is a game the commissioner typed or added from ESPN.
+            //    Lowering the target must never silently discard one; stop at the first filled
+            //    matchup instead. "Games Added" then reads over the target, and the save handler
+            //    rejects the write with a message naming both numbers.
+            while (currentCount > desiredCount) {
+                const fieldsets = matchupsContainer.querySelectorAll('.matchup-fieldset');
+                const last      = fieldsets[fieldsets.length - 1];
+                if (!last) break;
+
+                const teamA = last.querySelector('input[name="team_a[]"]');
+                const teamB = last.querySelector('input[name="team_b[]"]');
+                const filled = (teamA && teamA.value.trim() !== '') || (teamB && teamB.value.trim() !== '');
+                if (filled) break;
+
+                last.remove();
                 currentCount--;
             }
         }

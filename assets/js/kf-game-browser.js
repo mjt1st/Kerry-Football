@@ -970,11 +970,36 @@
         // Recompute whenever the matchup list changes by any route — games added, count
         // changed, fieldsets rebuilt — instead of hooking each mutation site individually.
         function startWeekProfile() {
-            function refreshAll() { updateWeekProfile(); updateGamesAddedBox(); kfRenderMatchControls(); }
+            var container      = document.getElementById('matchups-container');
+            var observerConfig = { childList: true, subtree: true };
+            var weekObserver   = null;
+            var refreshing     = false;
 
-            var container = document.getElementById('matchups-container');
+            // refreshAll writes INSIDE the observed container: kfRenderMatchControls() appends
+            // a .kf-espn-link-row host to each fieldset and rewrites its innerHTML. Those are
+            // childList mutations in the observed subtree, so an unguarded observer re-entered
+            // its own callback forever the moment any matchup had both team names filled in —
+            // freezing the browser's main thread with no console error and no way to reload.
+            // The observer is detached for the duration of the render (disconnect() also drops
+            // its pending records) and reattached after; the flag stops the delegated input
+            // handler and the initial call re-entering the same way.
+            function refreshAll() {
+                if (refreshing) { return; }
+                refreshing = true;
+                if (weekObserver) { weekObserver.disconnect(); }
+                try {
+                    updateWeekProfile();
+                    updateGamesAddedBox();
+                    kfRenderMatchControls();
+                } finally {
+                    if (weekObserver && container) { weekObserver.observe(container, observerConfig); }
+                    refreshing = false;
+                }
+            }
+
             if (container && window.MutationObserver) {
-                new MutationObserver(refreshAll).observe(container, { childList: true, subtree: true });
+                weekObserver = new MutationObserver(refreshAll);
+                weekObserver.observe(container, observerConfig);
             }
             // Typing a team name changes no DOM node, so the observer above never sees manual
             // entry. Delegated input events cover it.
