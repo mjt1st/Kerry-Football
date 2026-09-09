@@ -313,7 +313,14 @@ function kf_normalize_espn_event( $event, $sport ) {
         if ( $spread_details === 'PK' || $spread_details === 'EVEN' ) {
             $spread_home = 0.0;
             $spread_away = 0.0;
-        } elseif ( preg_match( '/^([A-Z0-9]+)\s+([-+]?\d+\.?\d*)$/i', trim( $spread_details ), $m ) ) {
+        // ⚠️ Match the abbreviation as "everything before the trailing number", not as a
+        // character class. It used to be ([A-Z0-9]+), which silently rejected every ESPN
+        // abbreviation containing punctuation — "TA&M -14.5" (Texas A&M) being the one that
+        // surfaced it. The card still showed a spread, because the badge renders the raw
+        // details string, but spread_home/spread_away stayed null: the week profile reported
+        // "No odds", the colour coding fell back to neutral, and nothing numeric reached the
+        // matchups row for players to see. College abbreviations carry &, -, . and ( ).
+        } elseif ( preg_match( '/^(.+?)\s+([-+]?\d+(?:\.\d+)?)$/', trim( $spread_details ), $m ) ) {
             $fav_abbr    = strtoupper( $m[1] );
             $fav_spread  = floatval( $m[2] ); // already negative for the favourite
             $home_abbr_u = strtoupper( $home['team']['abbreviation'] ?? '' );

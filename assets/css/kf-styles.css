@@ -2008,3 +2008,64 @@ body.admin-bar .kf-week-sticky-header { top: 32px; }
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
 }
+
+/* ============================================================
+   Frozen header on the week summary grid
+   ============================================================
+   `.kf-table thead { position: sticky; top: 0 }` has existed since the first
+   release and never did anything, because `.kf-table-wrapper` sets
+   `overflow-x: auto` — and a non-visible overflow on one axis computes the
+   other to `auto` too. That makes the WRAPPER the scroll container the sticky
+   header resolves against, not the page; the wrapper grows to the table's full
+   height, so it never scrolls vertically and the header never had anything to
+   stick inside. Scrolling the page just carried the whole box away.
+
+   Bounding the wrapper's height is what makes it real: the table now scrolls
+   inside its own box, so the header (and the already-sticky first column) stay
+   put. Applied through a modifier class, so every other table keeps the plain
+   full-height layout it has today.
+
+   Sticky lives on the `th` cells rather than on `thead`: the header is two rows
+   (player names, then Pick/Points), and per-cell offsets are the portable way to
+   pin both. Row two's offset is row one's measured height, published as
+   --kf-thead-row1-h by kf-table-controls.js — the rows carry player names, live
+   subtotals and award badges, so the height is not a constant worth guessing. */
+.kf-table-wrapper.kf-table-frozen {
+    max-height: calc(100vh - 140px);
+    overflow: auto;
+    overscroll-behavior: contain;
+}
+
+/* thead's own sticky would fight the per-cell rules below. */
+.kf-table-frozen .kf-table thead {
+    position: static;
+}
+
+.kf-table-frozen .kf-table thead th {
+    position: sticky;
+    z-index: 12;
+    background-color: var(--kf-primary-color) !important;
+}
+.kf-table-frozen .kf-table thead tr:first-child th  { top: 0; }
+.kf-table-frozen .kf-table thead tr:nth-child(2) th { top: var(--kf-thead-row1-h, 64px); }
+
+/* The corner cell is frozen on both axes, so it outranks each single-axis neighbour. */
+.kf-table-frozen .kf-table thead th:first-child {
+    left: 0;
+    z-index: 14;
+}
+
+/* Repeated mid-table header rows would otherwise pin themselves at the top too
+   and stack up behind the real header as you scroll. */
+.kf-table-frozen .kf-table tr.kf-mid-header th {
+    position: static;
+}
+
+/* A bounded, scrolling box prints as a clipped box — restore the full table. */
+@media print {
+    .kf-table-wrapper.kf-table-frozen {
+        max-height: none;
+        overflow: visible;
+    }
+    .kf-table-frozen .kf-table thead th { position: static; }
+}

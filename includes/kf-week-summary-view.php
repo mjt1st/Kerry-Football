@@ -422,7 +422,9 @@ function kf_week_summary_view() {
             <div class="kf-print-header">
                 <h1><?php echo esc_html($week->season_name); ?> - Week <?php echo esc_html($week->week_number); ?> Summary</h1>
             </div>
-            <div class="kf-table-wrapper">
+            <?php // kf-table-frozen bounds this box's height so the sticky header and first
+                  // column have a scroll container to stick inside. See kf-styles.css. ?>
+            <div class="kf-table-wrapper kf-table-frozen">
                 <div class="kf-zoom-container">
                     <?php
                     // Compare toggle. Hidden while picks are concealed (pre-deadline for players),

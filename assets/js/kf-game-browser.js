@@ -834,6 +834,23 @@
             }
         }
 
+        // A kickoff in a matchup fieldset arrives in one of two shapes: straight from ESPN it is
+        // ISO-8601 with a Z ("2026-09-12T16:00Z"), but once the week has been saved and reopened
+        // it comes from the DB column, which is UTC written as "2026-09-12 16:00:00" with no zone
+        // marker. new Date() reads that second form as LOCAL time, so a noon kickoff redisplayed
+        // as 4:00 PM on an eastern clock. Every PHP reader already treats the column as UTC
+        // (get_date_from_gmt, DateTimeZone('UTC'), strtotime(... . ' UTC')); this makes the JS
+        // agree instead of silently shifting by the viewer's offset.
+        function parseStoredKickoff(raw) {
+            if (!raw) { return null; }
+            var v = String(raw).trim();
+            if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?$/.test(v)) {
+                v = v.replace(' ', 'T') + 'Z';
+            }
+            var d = new Date(v);
+            return isNaN(d.getTime()) ? null : d;
+        }
+
         // ---- Week profile (running stats for the commissioner) ----
         // Reads the matchup fieldsets rather than fetchedGames, so it covers games added in an
         // earlier session (edit mode) and stays correct if a matchup is removed.
@@ -857,7 +874,7 @@
                         home:     home ? home.value.trim() : '',
                         spread:   sh === '' ? null : Math.abs(parseFloat(sh)),
                         overUnder: parseFloat(val('over_under')) || null,
-                        kickoff:  val('game_datetime') ? new Date(val('game_datetime')) : null
+                        kickoff:  parseStoredKickoff(val('game_datetime'))
                     };
                 }
             ).filter(function (m) { return m.away !== '' && m.home !== ''; });

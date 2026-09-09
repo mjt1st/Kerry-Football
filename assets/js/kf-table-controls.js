@@ -404,6 +404,50 @@ document.addEventListener('DOMContentLoaded', function() {
 
     /**
      * =================================================
+     * Frozen table header
+     * =================================================
+     * The week summary header is two rows deep — player names, then Pick/Points.
+     * Row one pins at top:0; row two has to pin at row one's height, and that
+     * height is not a constant: it carries live subtotals, award badges and the
+     * DD badge, and Compact mode changes it outright. So measure it and publish
+     * it as --kf-thead-row1-h; the CSS reads it for row two's offset.
+     *
+     * Deliberately event-driven, not observed. An observer here would be watching
+     * the same subtree it writes into, which is the trap that froze Week Setup.
+     */
+    const frozenWrapper = document.querySelector('.kf-table-wrapper.kf-table-frozen');
+    if (frozenWrapper) {
+        const syncHeaderOffset = () => {
+            const firstRow = frozenWrapper.querySelector('.kf-table thead tr:first-child');
+            if (!firstRow) return;
+            const h = Math.round(firstRow.getBoundingClientRect().height);
+            if (h > 0) frozenWrapper.style.setProperty('--kf-thead-row1-h', h + 'px');
+        };
+
+        syncHeaderOffset();
+        // Web fonts and the zoom transform both land after first paint.
+        window.addEventListener('load', syncHeaderOffset);
+
+        let resizeTimer = null;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(syncHeaderOffset, 150);
+        });
+
+        // Hide points / Game detail / Compact and the zoom buttons all change the
+        // header's height. Re-measure after the class or transform has been applied.
+        document.querySelectorAll(
+            '#kf-view-hide-points, #kf-view-detail, #kf-view-compact'
+        ).forEach(el => el.addEventListener('change', () => setTimeout(syncHeaderOffset, 0)));
+
+        ['kf-zoom-in', 'kf-zoom-out', 'kf-fit-view', 'kf-reset-view'].forEach(id => {
+            const btn = document.getElementById(id);
+            if (btn) btn.addEventListener('click', () => setTimeout(syncHeaderOffset, 0));
+        });
+    }
+
+    /**
+     * =================================================
      * Finalize Week Guard
      * Prevent finalizing if any result is still missing.
      * The PHP renders data-results-complete="1|0" on the
