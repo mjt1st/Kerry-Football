@@ -695,7 +695,8 @@
                 fs.className = 'matchup-fieldset';
                 fs.style.cssText = 'margin-bottom:16px;padding:12px;border:1px solid #ccc;border-radius:4px;';
                 fs.innerHTML =
-                    '<legend>Matchup ' + (idx + 1) + ' <span class="kf-api-badge">ESPN</span></legend>' +
+                    '<legend>Matchup ' + (idx + 1) + ' <span class="kf-api-badge">ESPN</span>' +
+                        ' <button type="button" class="kf-matchup-remove kf-linkish" title="Remove this matchup from the week">× Remove</button></legend>' +
                     '<div class="kf-form-group"><label>Away Team: <input type="text" name="team_b[]" value="' + escAttr(storedAway) + '" readonly class="kf-api-locked"></label></div>' +
                     '<div class="kf-form-group"><label>Home Team: <input type="text" name="team_a[]" value="' + escAttr(storedHome) + '" readonly class="kf-api-locked"></label></div>' +
                     '<div class="kf-form-group"><label><input type="radio" name="tiebreaker_marker" value="' + idx + '" ' + (idx === 0 ? 'checked' : '') + ' required> Mark as Tiebreaker</label></div>' +

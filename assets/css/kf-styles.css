@@ -2069,3 +2069,16 @@ body.admin-bar .kf-week-sticky-header { top: 32px; }
     }
     .kf-table-frozen .kf-table thead th { position: static; }
 }
+
+/* --- Remove control on a matchup fieldset (Week Setup) --- */
+.matchup-fieldset legend .kf-matchup-remove {
+    margin-left: 8px;
+    font-weight: 400;
+    color: #b91c1c;
+    border-color: #fecaca;
+}
+.matchup-fieldset legend .kf-matchup-remove:hover {
+    background: #fef2f2;
+    border-color: #fca5a5;
+}
+#kf-matchup-note:empty { display: none; }

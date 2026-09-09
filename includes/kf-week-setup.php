@@ -566,6 +566,10 @@ function kf_week_setup_form() {
             </fieldset>
             
             <hr><h3>Matchups</h3>
+            <?php // Written to by the remove handler. Deliberately OUTSIDE #matchups-container:
+                  // the game browser watches that container and re-renders on every change, so
+                  // status text belongs beside it, not inside it. ?>
+            <p class="kf-form-note" id="kf-matchup-note" aria-live="polite" style="min-height:1.2em;"></p>
             <div id="matchups-container" <?php if (!$is_matchup_editable && !$is_repair_mode) echo 'style="opacity:0.6;"'; ?>>
                 <?php
                 $num_to_display = $edit_mode ? count($matchups) : intval($matchup_count_val);
@@ -575,7 +579,7 @@ function kf_week_setup_form() {
                     $is_tiebreaker_checked = $edit_mode ? ($matchup && $matchup->id == $tiebreaker_parent_id) : ($i === 0);
                     ?>
                     <fieldset class="matchup-fieldset" style="margin-bottom: 16px; padding: 12px; border: 1px solid #ccc; border-radius: 4px;" <?php if (!$is_matchup_editable && !$is_repair_mode) echo 'disabled'; ?>>
-                        <legend>Matchup <?php echo $i + 1; ?></legend>
+                        <legend>Matchup <?php echo $i + 1; ?> <?php if ($is_matchup_editable) : ?><button type="button" class="kf-matchup-remove kf-linkish" title="Remove this matchup from the week">&times; Remove</button><?php endif; ?></legend>
                         <div class="kf-form-group"><label>Away Team (Team B): <input type="text" name="team_b[]" value="<?php echo esc_attr($matchup->team_b ?? ''); ?>" required></label></div>
                         <div class="kf-form-group"><label>Home Team (Team A): <input type="text" name="team_a[]" value="<?php echo esc_attr($matchup->team_a ?? ''); ?>" required></label></div>
                         <div class="kf-form-group"><label><input type="radio" name="tiebreaker_marker" value="<?php echo $i; ?>" <?php checked($is_tiebreaker_checked); ?> required> Mark as Tiebreaker</label></div>
@@ -680,7 +684,7 @@ function kf_week_setup_form() {
             fieldset.style.cssText = "margin-bottom: 16px; padding: 12px; border: 1px solid #ccc; border-radius: 4px;";
             // UX CHANGE: Swapped order to Away then Home
             fieldset.innerHTML = `
-                <legend>Matchup ${index + 1}</legend>
+                <legend>Matchup ${index + 1} <button type="button" class="kf-matchup-remove kf-linkish" title="Remove this matchup from the week">&times; Remove</button></legend>
                 <div class="kf-form-group"><label>Away Team (Team B): <input type="text" name="team_b[]" value="" required></label></div>
                 <div class="kf-form-group"><label>Home Team (Team A): <input type="text" name="team_a[]" value="" required></label></div>
                 <div class="kf-form-group"><label><input type="radio" name="tiebreaker_marker" value="${index}" ${index === 0 ? 'checked' : ''} required> Mark as Tiebreaker</label></div>
@@ -729,6 +733,77 @@ function kf_week_setup_form() {
                 last.remove();
                 currentCount--;
             }
+        }
+
+        // --- Removing a matchup ---
+        // The save handler walks $_POST['team_a'] by position and reads every other array —
+        // team_b[], espn_game_id[], the odds fields — at that same index, and compares
+        // tiebreaker_marker against it. Removing a whole fieldset keeps all of those arrays
+        // aligned, but the tiebreaker's value is a hard-coded index, so it has to be rewritten
+        // against the new positions or the flag lands on the wrong game.
+        const matchupNote = document.getElementById('kf-matchup-note');
+
+        function renumberMatchups() {
+            const fieldsets = matchupsContainer.querySelectorAll('.matchup-fieldset');
+            let hasTiebreaker = false;
+
+            fieldsets.forEach(function (fs, i) {
+                const legend = fs.querySelector('legend');
+                // Only the leading text node is rewritten, so the ESPN badge and the Remove
+                // button that follow it survive the renumber.
+                if (legend && legend.firstChild && legend.firstChild.nodeType === 3) {
+                    legend.firstChild.nodeValue = 'Matchup ' + (i + 1) + ' ';
+                }
+                const radio = fs.querySelector('input[name="tiebreaker_marker"]');
+                if (radio) {
+                    radio.value = i;
+                    if (radio.checked) hasTiebreaker = true;
+                }
+            });
+
+            // The radio is required, so a week with no checked tiebreaker cannot be saved at
+            // all — silently falling back to the first matchup beats a form that won't submit
+            // and won't say why.
+            if (!hasTiebreaker && fieldsets.length) {
+                const first = fieldsets[0].querySelector('input[name="tiebreaker_marker"]');
+                if (first) { first.checked = true; return true; }
+            }
+            return false;
+        }
+
+        function describeMatchup(fs) {
+            const a = fs.querySelector('input[name="team_a[]"]');
+            const b = fs.querySelector('input[name="team_b[]"]');
+            const home = a ? a.value.trim() : '';
+            const away = b ? b.value.trim() : '';
+            if (!home && !away) return '';
+            return (away || '?') + ' @ ' + (home || '?');
+        }
+
+        if (matchupsContainer) {
+            matchupsContainer.addEventListener('click', function (e) {
+                const btn = e.target.closest('.kf-matchup-remove');
+                if (!btn) return;
+                e.preventDefault();
+
+                const fs = btn.closest('.matchup-fieldset');
+                if (!fs) return;
+
+                // Confirm only when there is something to lose. Blank placeholder fieldsets are
+                // the common case and nagging about those would train the click away.
+                const label = describeMatchup(fs);
+                if (label && !confirm('Remove ' + label + ' from this week?')) return;
+
+                fs.remove();
+                const tiebreakerMoved = renumberMatchups();
+
+                if (matchupNote) {
+                    let msg = label ? 'Removed ' + label + '.' : 'Removed an empty matchup.';
+                    if (tiebreakerMoved) { msg += ' It was the tiebreaker, so Matchup 1 is now marked instead — change it if that is wrong.'; }
+                    msg += ' Nothing is saved until you press Save.';
+                    matchupNote.textContent = msg;
+                }
+            });
         }
 
         function validatePoints() {
