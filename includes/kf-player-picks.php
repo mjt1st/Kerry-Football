@@ -270,6 +270,7 @@ function _kf_display_picks_form(
             <span class="kf-export-label">Export picks</span>
             <button type="button" class="kf-button kf-button-secondary kf-export-download">Download CSV</button>
             <button type="button" class="kf-button kf-button-secondary kf-export-copy">Copy CSV</button>
+            <button type="button" class="kf-button kf-button-secondary kf-export-copy-excel" title="Tab-separated, so pasting into Excel splits into columns">Copy for Excel</button>
             <div class="kf-export-status" role="status" aria-live="polite"></div>
             <?php // JSON rather than data attributes: team strings must reach the CSV
                   // character-for-character, and JSON_HEX_TAG keeps a stray "</script>" inert. ?>
@@ -1011,6 +1012,16 @@ function kf_my_picks_shortcode() {
     return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
   }
 
+  // Copy for Excel. Excel's paste parser splits on tabs and never on commas, so the CSV text
+  // lands entirely in column A. It also treats a field that STARTS with a double quote as quoted
+  // text and strips the quotes — "Quoted" Name pastes as Quoted Name. So a field starting with a
+  // quote, or holding a tab or line break, is wrapped with its quotes doubled; every other field
+  // goes out bare (a quote mid-field, as in Local "Tigers", pastes intact). Verified in Excel 16.
+  function tsvField(v){
+    v = (v === null || v === undefined) ? '' : String(v);
+    return /^"|[\t\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  }
+
   function buildPicksCsv(bar){
     var el = bar.querySelector('script.kf-picks-export-data');
     var payload = null;
@@ -1022,6 +1033,7 @@ function kf_my_picks_shortcode() {
     var form = bar.closest('form');
     var errors = [], warnings = [], tbCount = 0;
     var lines = [KF_CSV_HEADER.join(',')];
+    var table = [KF_CSV_HEADER.slice()];
 
     payload.rows.forEach(function(r, i){
       var away = r.away_team, home = r.home_team, fav = r.favorite, spread = r.spread;
@@ -1065,18 +1077,24 @@ function kf_my_picks_shortcode() {
       if(r.kickoff_iso === ''){
         warnings.push(label + ': no kickoff time on record, so kickoff_iso is empty.');
       }
-      // Spreadsheet apps evaluate a text cell starting with = + - @ (or a tab or CR) as a
-      // formula. Team strings must go out character-identical, so they are never rewritten or
-      // prefixed here — a value that could run as a formula is surfaced as a warning instead.
+      // A text cell starting with = + - @ (or a tab or CR) can run as a formula. Verified in
+      // Excel 16: double-clicking the file, the legacy import wizard, pasting (either Copy button)
+      // and Text to Columns all run = and - leading text; only Data > From Text/CSV keeps it as
+      // text. There is no in-band defuse — quoting still runs, and a leading apostrophe is kept
+      // literally on paste — and team strings must go out character-identical anyway, so the
+      // value is never rewritten here; it is surfaced as a warning instead. (@ stayed text in
+      // current Excel but stays in the check for older versions and other spreadsheet apps.)
       [['away_team', away], ['home_team', home], ['pick', pick]].forEach(function(pair){
         if(/^[=+\-@\t\r]/.test(pair[1])){
-          warnings.push(label + ': ' + pair[0] + ' "' + pair[1] + '" starts with a character spreadsheet apps treat as a formula. Import the file or open it as text rather than double-clicking it.');
+          warnings.push(label + ': ' + pair[0] + ' "' + pair[1] + '" starts with a character Excel runs as a formula. Double-clicking the file, the legacy import wizard, pasting (either Copy button) and Text to Columns all run it \u2014 bring the file in with Data \u2192 From Text/CSV to keep it as text.');
         }
       });
       if(r.is_tiebreaker){ tbCount++; }
 
-      lines.push([r.game_id, r.kickoff_iso, away, home, fav, spread, r.total, pick,
-                  r.is_tiebreaker ? 'TRUE' : 'FALSE', r.odds_source, r.odds_as_of].map(csvField).join(','));
+      var fields = [r.game_id, r.kickoff_iso, away, home, fav, spread, r.total, pick,
+                    r.is_tiebreaker ? 'TRUE' : 'FALSE', r.odds_source, r.odds_as_of];
+      table.push(fields);
+      lines.push(fields.map(csvField).join(','));
     });
 
     if(tbCount !== 1){
@@ -1084,7 +1102,12 @@ function kf_my_picks_shortcode() {
     }
 
     // One terminating newline, no blank lines, no BOM.
-    return { csv: lines.join('\n') + '\n', rows: lines.length - 1, errors: errors, warnings: warnings, week: payload.week_number };
+    // Copy for Excel uses CRLF, the Windows clipboard convention. The CSV contract (LF) is untouched.
+    return {
+      csv: lines.join('\n') + '\n',
+      tsv: table.map(function(f){ return f.map(tsvField).join('\t'); }).join('\r\n') + '\r\n',
+      rows: lines.length - 1, errors: errors, warnings: warnings, week: payload.week_number
+    };
   }
 
   function exportFilename(week){
@@ -1142,8 +1165,11 @@ function kf_my_picks_shortcode() {
           downloadCsv(res.csv, exportFilename(res.week));
           showExportStatus(bar, kind, 'Downloaded ' + res.rows + ' rows as ' + exportFilename(res.week) + '.', res.warnings);
         } else {
-          copyText(res.csv).then(function(){
-            showExportStatus(bar, kind, 'Copied ' + res.rows + ' rows to the clipboard.', res.warnings);
+          var forExcel = (action === 'excel');
+          copyText(forExcel ? res.tsv : res.csv).then(function(){
+            showExportStatus(bar, kind, forExcel
+              ? 'Copied ' + res.rows + ' rows for Excel \u2014 click cell A1 and paste; the columns split automatically.'
+              : 'Copied ' + res.rows + ' rows to the clipboard.', res.warnings);
           }, function(){
             showExportStatus(bar, 'error', 'The browser would not allow copying \u2014 use Download CSV instead.');
           });
@@ -1153,6 +1179,8 @@ function kf_my_picks_shortcode() {
       var cp = bar.querySelector('.kf-export-copy');
       if(dl){ dl.addEventListener('click', function(){ run('download'); }); }
       if(cp){ cp.addEventListener('click', function(){ run('copy'); }); }
+      var cx = bar.querySelector('.kf-export-copy-excel');
+      if(cx){ cx.addEventListener('click', function(){ run('excel'); }); }
       bar.dataset.exportInit = 'true';
     });
   }
