@@ -2082,3 +2082,23 @@ body.admin-bar .kf-week-sticky-header { top: 32px; }
     border-color: #fca5a5;
 }
 #kf-matchup-note:empty { display: none; }
+
+/* --- Picks CSV export bar --- */
+.kf-export-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    margin-bottom: 12px;
+    padding: 8px 12px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+}
+.kf-export-bar .kf-export-label { font-size: 0.85em; font-weight: 600; color: #475569; }
+.kf-export-status { flex-basis: 100%; font-size: 0.85em; }
+.kf-export-status:empty { display: none; }
+.kf-export-status.kf-export-ok    { color: #166534; }
+.kf-export-status.kf-export-warn  { color: #92400e; }
+.kf-export-status.kf-export-error { color: #b91c1c; }
+.kf-export-status ul { margin: 4px 0 0 1.2em; padding: 0; }

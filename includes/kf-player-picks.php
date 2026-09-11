@@ -46,6 +46,80 @@ function _kf_display_readonly_picks_view($title, $message, $dd_selection_exists,
     <?php
 }
 
+// ---------- Utility: CSV export fields for one matchup ----------
+/**
+ * Everything in a picks-export row that the server can know. `pick` is deliberately absent:
+ * the export reflects the pick currently SELECTED on the page — including an unsaved
+ * Auto-fill Favorites pass — so the browser reads it live from the named <select> at export
+ * time instead.
+ *
+ * Each value follows a convention the plugin already relies on, so the CSV cannot disagree
+ * with the page it came from:
+ *  - game_datetime and odds_updated_at are UTC in every writer (Week Setup, the ESPN link
+ *    handler), and are converted here to the site timezone.
+ *  - The favourite comes from spread_home's sign — the same rule behind the row's
+ *    data-favorite attribute and the auto-fill button — and the line is expressed from that
+ *    same side, so `favorite` and `spread` can never name different teams.
+ *  - Team strings are the stored matchup names verbatim: exactly what the page displays and
+ *    exactly what a saved pick holds, which is what keeps `favorite` and `pick`
+ *    character-identical to one of them.
+ */
+function _kf_picks_export_fields( $m ) {
+    $kickoff_iso = '';
+    if ( ! empty( $m->game_datetime ) && $m->game_datetime !== '0000-00-00 00:00:00' ) {
+        try {
+            $dt = new DateTime( $m->game_datetime, new DateTimeZone( 'UTC' ) );
+            $kickoff_iso = $dt->setTimezone( new DateTimeZone( wp_timezone_string() ) )->format( 'c' );
+        } catch ( Exception $e ) {
+            $kickoff_iso = '';
+        }
+    }
+
+    $favorite = '';
+    $spread   = '';
+    if ( $m->spread_home !== null && $m->spread_home !== '' ) {
+        $sh = (float) $m->spread_home;
+        if ( $sh == 0.0 ) {
+            $spread = '0';                                     // posted pick'em: a line of zero
+        } elseif ( $sh < 0 ) {
+            $favorite = (string) $m->team_a;                   // home gives the points
+            $spread   = number_format( $sh, 1, '.', '' );
+        } else {
+            $favorite = (string) $m->team_b;                   // away gives the points
+            $spread   = number_format( -$sh, 1, '.', '' );
+        }
+    }
+    // No line posted at all leaves both empty. Writing 0 there would invent a pick'em line
+    // that ESPN never offered, and the row's odds_source/odds_as_of would then vouch for it.
+
+    $total = ( $m->over_under !== null && $m->over_under !== '' )
+        ? number_format( (float) $m->over_under, 1, '.', '' )
+        : '';
+
+    // Source and date only when a line was actually captured. Linking a game to ESPN stamps
+    // odds_updated_at even when ESPN posts nothing, and a date beside empty odds would read
+    // as "these were the odds on that day".
+    $odds_source = '';
+    $odds_as_of  = '';
+    if ( ( $spread !== '' || $total !== '' )
+        && ! empty( $m->odds_updated_at ) && $m->odds_updated_at !== '0000-00-00 00:00:00' ) {
+        $odds_source = 'ESPN';
+        $odds_as_of  = get_date_from_gmt( $m->odds_updated_at, 'Y-m-d' );
+    }
+
+    return [
+        'game_id'     => (string) (int) $m->id,
+        'kickoff_iso' => $kickoff_iso,
+        'away_team'   => (string) $m->team_b,
+        'home_team'   => (string) $m->team_a,
+        'favorite'    => $favorite,
+        'spread'      => $spread,
+        'total'       => $total,
+        'odds_source' => $odds_source,
+        'odds_as_of'  => $odds_as_of,
+    ];
+}
+
 // ---------- Utility: Render picks form section (Standard or BPOW) ----------
 function _kf_display_picks_form(
     $is_bpow_form,
@@ -158,6 +232,52 @@ function _kf_display_picks_form(
             <span class="kf-autofill-note">Fills in spread favorites only &mdash; you still choose your point values.</span>
         </div>
     <?php endif; ?>
+    <?php
+    // --- CSV export (Standard section only) ---
+    // BPOW is a second pick set over the same games with no tiebreaker. The column layout is
+    // fixed and has no way to mark which set a row belongs to, so exporting both would emit
+    // every game twice with nothing to tell them apart.
+    if (!$is_bpow_form):
+        $kf_export_rows = [];
+        foreach ($matchups as $em) {
+            $row = _kf_picks_export_fields($em);
+            $row['pick_field']    = $pick_name_prefix . '[' . (int)$em->id . ']';
+            $row['is_tiebreaker'] = false;
+            $kf_export_rows[] = $row;
+        }
+        if ($tiebreaker_matchup) {
+            $row = _kf_picks_export_fields($tiebreaker_matchup);
+            // The tiebreaker is stored as a second copy of one regular game, matched on
+            // team_a/team_b — the rule Week Setup and the ESPN link handler both use. Its own
+            // input holds a points total rather than a team, so its `pick` is the pick made
+            // for the game it duplicates. A tiebreaker with no regular twin has no team pick.
+            $row['pick_field'] = '';
+            foreach ($matchups as $em) {
+                if ($em->team_a === $tiebreaker_matchup->team_a && $em->team_b === $tiebreaker_matchup->team_b) {
+                    $row['pick_field'] = $pick_name_prefix . '[' . (int)$em->id . ']';
+                    break;
+                }
+            }
+            $row['is_tiebreaker'] = true;
+            $kf_export_rows[] = $row;
+        }
+        $kf_export_payload = [
+            'week_number' => (int)$current_week->week_number,
+            'rows'        => $kf_export_rows,
+        ];
+        ?>
+        <div class="kf-export-bar">
+            <span class="kf-export-label">Export picks</span>
+            <button type="button" class="kf-button kf-button-secondary kf-export-download">Download CSV</button>
+            <button type="button" class="kf-button kf-button-secondary kf-export-copy">Copy CSV</button>
+            <div class="kf-export-status" role="status" aria-live="polite"></div>
+            <?php // JSON rather than data attributes: team strings must reach the CSV
+                  // character-for-character, and JSON_HEX_TAG keeps a stray "</script>" inert. ?>
+            <script type="application/json" class="kf-picks-export-data"><?php
+                echo wp_json_encode($kf_export_payload, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE);
+            ?></script>
+        </div>
+    <?php endif; ?>
     <table class="kf-table kf-picks-table-<?php echo esc_attr($scope); ?>">
         <thead><tr><th>Matchup</th><th>Pick</th><th>Point Value</th></tr></thead>
         <tbody>
@@ -214,7 +334,7 @@ function _kf_display_picks_form(
                         </div>
                         <?php if ( ! empty( $matchup->odds_updated_at ) ) : ?>
                             <div class="kf-odds-timestamp">
-                                Odds via ESPN &middot; as of <?php echo esc_html( date( 'M j, Y', strtotime( $matchup->odds_updated_at ) ) ); ?>
+                                Odds via ESPN &middot; as of <?php echo esc_html( get_date_from_gmt( $matchup->odds_updated_at, 'M j, Y' ) ); ?>
                             </div>
                         <?php endif; ?>
                     <?php endif; ?>
@@ -877,11 +997,164 @@ function kf_my_picks_shortcode() {
     });
   }
 
+  /* --- CSV export ---
+     The column order and every formatting rule below are a contract with whatever reads the
+     file, so they are fixed rather than configurable. Rows come from the JSON the server
+     rendered beside the buttons; only `pick` is read live, from the select the player can
+     still change — which is what makes an unsaved Auto-fill pass show up in the export. */
+  var KF_CSV_HEADER = ['game_id','kickoff_iso','away_team','home_team','favorite','spread','total','pick','is_tiebreaker','odds_source','odds_as_of'];
+
+  function csvField(v){
+    v = (v === null || v === undefined) ? '' : String(v);
+    // RFC 4180: quote only a field holding a comma, double quote or line break, doubling
+    // any embedded quote. Everything else goes out bare.
+    return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  }
+
+  function buildPicksCsv(bar){
+    var el = bar.querySelector('script.kf-picks-export-data');
+    var payload = null;
+    try { payload = el ? JSON.parse(el.textContent) : null; } catch(e){ payload = null; }
+    if(!payload || !payload.rows){
+      return { errors: ['The export data for this week could not be read.'], warnings: [] };
+    }
+
+    var form = bar.closest('form');
+    var errors = [], warnings = [], tbCount = 0;
+    var lines = [KF_CSV_HEADER.join(',')];
+
+    payload.rows.forEach(function(r, i){
+      var away = r.away_team, home = r.home_team, fav = r.favorite, spread = r.spread;
+      var pick = '';
+      if(r.pick_field && form){
+        var sel = form.elements.namedItem(r.pick_field);
+        if(sel && typeof sel.value === 'string'){ pick = sel.value; }
+      }
+      var label = 'Row ' + (i + 1) + ' (' + away + ' @ ' + home + (r.is_tiebreaker ? ', tiebreaker' : '') + ')';
+
+      if(String(r.game_id).indexOf(',') !== -1){ errors.push(label + ': game_id contains a comma.'); }
+
+      if(fav !== '' && fav !== away && fav !== home){
+        errors.push(label + ': favorite "' + fav + '" matches neither team name.');
+      }
+
+      if(spread !== ''){
+        var s = Number(spread);
+        if(spread.charAt(0) === '+' || s > 0){
+          errors.push(label + ': spread ' + spread + ' is positive; only the favorite\'s negative line is allowed.');
+        } else if(!/^(0|-\d+\.\d)$/.test(spread)){
+          errors.push(label + ': spread "' + spread + '" is not a one-decimal negative number or 0.');
+        } else if(s === 0 && fav !== ''){
+          errors.push(label + ': spread is 0 (pick\'em) but a favorite is named.');
+        } else if(s < 0 && fav === ''){
+          errors.push(label + ': spread ' + spread + ' names no favorite.');
+        }
+      } else if(fav !== ''){
+        errors.push(label + ': a favorite is named but no spread is posted.');
+      }
+
+      if(pick !== '' && pick !== away && pick !== home){
+        errors.push(label + ': pick "' + pick + '" matches neither team name.');
+      }
+      if(r.total !== '' && !/^\d+\.\d$/.test(r.total)){
+        errors.push(label + ': total "' + r.total + '" is not a one-decimal number.');
+      }
+      if(r.odds_as_of !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(r.odds_as_of)){
+        errors.push(label + ': odds_as_of "' + r.odds_as_of + '" is not YYYY-MM-DD.');
+      }
+      if(r.kickoff_iso === ''){
+        warnings.push(label + ': no kickoff time on record, so kickoff_iso is empty.');
+      }
+      if(r.is_tiebreaker){ tbCount++; }
+
+      lines.push([r.game_id, r.kickoff_iso, away, home, fav, spread, r.total, pick,
+                  r.is_tiebreaker ? 'TRUE' : 'FALSE', r.odds_source, r.odds_as_of].map(csvField).join(','));
+    });
+
+    if(tbCount !== 1){
+      errors.push('Exactly one tiebreaker row is required; this week has ' + tbCount + '.');
+    }
+
+    // One terminating newline, no blank lines, no BOM.
+    return { csv: lines.join('\n') + '\n', rows: lines.length - 1, errors: errors, warnings: warnings, week: payload.week_number };
+  }
+
+  function exportFilename(week){
+    var d = new Date();
+    var pad = function(x){ return (x < 10 ? '0' : '') + x; };
+    return 'picks-week-' + week + '-' + d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + '.csv';
+  }
+
+  function showExportStatus(bar, kind, headline, items){
+    var st = bar.querySelector('.kf-export-status');
+    if(!st){ return; }
+    st.className = 'kf-export-status kf-export-' + kind;
+    st.textContent = headline;
+    if(items && items.length){
+      var ul = document.createElement('ul');
+      items.forEach(function(t){ var li = document.createElement('li'); li.textContent = t; ul.appendChild(li); });
+      st.appendChild(ul);
+    }
+  }
+
+  function downloadCsv(text, filename){
+    // A Blob built from a JS string is UTF-8 with no BOM.
+    var url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+    var a = document.createElement('a');
+    a.href = url; a.download = filename; a.style.display = 'none';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  }
+
+  function copyText(text){
+    if(navigator.clipboard && window.isSecureContext){ return navigator.clipboard.writeText(text); }
+    return new Promise(function(resolve, reject){
+      var ta = document.createElement('textarea');
+      ta.value = text; ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed'; ta.style.left = '-9999px';
+      document.body.appendChild(ta); ta.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch(e){ ok = false; }
+      document.body.removeChild(ta);
+      if(ok){ resolve(); } else { reject(new Error('copy failed')); }
+    });
+  }
+
+  function initExport(){
+    document.querySelectorAll('.kf-export-bar').forEach(function(bar){
+      if(bar.dataset.exportInit === 'true'){ return; }
+      function run(action){
+        var res = buildPicksCsv(bar);
+        if(res.errors.length){
+          showExportStatus(bar, 'error', 'Export blocked \u2014 nothing was downloaded or copied. Fix these first:', res.errors.concat(res.warnings));
+          return;
+        }
+        var kind = res.warnings.length ? 'warn' : 'ok';
+        if(action === 'download'){
+          downloadCsv(res.csv, exportFilename(res.week));
+          showExportStatus(bar, kind, 'Downloaded ' + res.rows + ' rows as ' + exportFilename(res.week) + '.', res.warnings);
+        } else {
+          copyText(res.csv).then(function(){
+            showExportStatus(bar, kind, 'Copied ' + res.rows + ' rows to the clipboard.', res.warnings);
+          }, function(){
+            showExportStatus(bar, 'error', 'The browser would not allow copying \u2014 use Download CSV instead.');
+          });
+        }
+      }
+      var dl = bar.querySelector('.kf-export-download');
+      var cp = bar.querySelector('.kf-export-copy');
+      if(dl){ dl.addEventListener('click', function(){ run('download'); }); }
+      if(cp){ cp.addEventListener('click', function(){ run('copy'); }); }
+      bar.dataset.exportInit = 'true';
+    });
+  }
+
   /* --- Boot --- */
   function boot(){
     document.querySelectorAll('.kf-form-section').forEach(initSection);
     document.querySelectorAll('form.kf-tracked-form').forEach(initSubmitGuard);
     initAutoFill();
+    initExport();
   }
   if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', boot); } else { boot(); }
   var mo = new MutationObserver(function(){ boot(); });
