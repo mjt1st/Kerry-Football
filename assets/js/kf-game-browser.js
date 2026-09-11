@@ -1009,6 +1009,14 @@
                     updateWeekProfile();
                     updateGamesAddedBox();
                     kfRenderMatchControls();
+                    // A removed ESPN matchup has to free its game card again. The Added badge
+                    // and the disabled checkbox are derived from the hidden espn_game_id[]
+                    // inputs, but only when refreshAddedState() runs — and nothing on the remove
+                    // path called it, so the card stayed "Added" and could not be re-selected
+                    // without a re-fetch. The game list exists only when the browser panel is
+                    // rendered (draft weeks), hence the guard. Everything it writes lives in
+                    // #kf-games-list, outside the observed container.
+                    if (gamesList) { refreshAddedState(); }
                 } finally {
                     if (weekObserver && container) { weekObserver.observe(container, observerConfig); }
                     refreshing = false;

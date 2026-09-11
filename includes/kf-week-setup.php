@@ -684,7 +684,7 @@ function kf_week_setup_form() {
             fieldset.style.cssText = "margin-bottom: 16px; padding: 12px; border: 1px solid #ccc; border-radius: 4px;";
             // UX CHANGE: Swapped order to Away then Home
             fieldset.innerHTML = `
-                <legend>Matchup ${index + 1} <button type="button" class="kf-matchup-remove kf-linkish" title="Remove this matchup from the week">&times; Remove</button></legend>
+                <legend>Matchup ${index + 1} <?php if ($is_matchup_editable) : ?><button type="button" class="kf-matchup-remove kf-linkish" title="Remove this matchup from the week">&times; Remove</button><?php endif; ?></legend>
                 <div class="kf-form-group"><label>Away Team (Team B): <input type="text" name="team_b[]" value="" required></label></div>
                 <div class="kf-form-group"><label>Home Team (Team A): <input type="text" name="team_a[]" value="" required></label></div>
                 <div class="kf-form-group"><label><input type="radio" name="tiebreaker_marker" value="${index}" ${index === 0 ? 'checked' : ''} required> Mark as Tiebreaker</label></div>
@@ -796,6 +796,11 @@ function kf_week_setup_form() {
 
                 fs.remove();
                 const tiebreakerMoved = renumberMatchups();
+
+                // Removing a fieldset fires no change event, so the tracked-form guard in
+                // kf-table-controls.js never learned the week had unsaved edits and let the
+                // commissioner navigate away without the usual warning.
+                if (typeof window.kerryFootballFormDirty !== 'undefined') { window.kerryFootballFormDirty = true; }
 
                 if (matchupNote) {
                     let msg = label ? 'Removed ' + label + '.' : 'Removed an empty matchup.';

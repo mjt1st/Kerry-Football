@@ -1065,6 +1065,14 @@ function kf_my_picks_shortcode() {
       if(r.kickoff_iso === ''){
         warnings.push(label + ': no kickoff time on record, so kickoff_iso is empty.');
       }
+      // Spreadsheet apps evaluate a text cell starting with = + - @ (or a tab or CR) as a
+      // formula. Team strings must go out character-identical, so they are never rewritten or
+      // prefixed here — a value that could run as a formula is surfaced as a warning instead.
+      [['away_team', away], ['home_team', home], ['pick', pick]].forEach(function(pair){
+        if(/^[=+\-@\t\r]/.test(pair[1])){
+          warnings.push(label + ': ' + pair[0] + ' "' + pair[1] + '" starts with a character spreadsheet apps treat as a formula. Import the file or open it as text rather than double-clicking it.');
+        }
+      });
       if(r.is_tiebreaker){ tbCount++; }
 
       lines.push([r.game_id, r.kickoff_iso, away, home, fav, spread, r.total, pick,

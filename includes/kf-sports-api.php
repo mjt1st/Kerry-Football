@@ -324,10 +324,16 @@ function kf_normalize_espn_event( $event, $sport ) {
             $fav_abbr    = strtoupper( $m[1] );
             $fav_spread  = floatval( $m[2] ); // already negative for the favourite
             $home_abbr_u = strtoupper( $home['team']['abbreviation'] ?? '' );
-            if ( $fav_abbr === $home_abbr_u ) {
+            $away_abbr_u = strtoupper( $away['team']['abbreviation'] ?? '' );
+            // Name the favourite only on an exact abbreviation match, for either side. The
+            // capture above accepts any leading text, so the old "not home, therefore away"
+            // fallback would hand an unrecognised string's line to the wrong team — and that
+            // line drives the favourite, Auto-fill and the picks export. No match leaves both
+            // spreads null; the game card still shows ESPN's raw details string.
+            if ( $home_abbr_u !== '' && $fav_abbr === $home_abbr_u ) {
                 $spread_home = $fav_spread;   // negative → home is favourite
                 $spread_away = -$fav_spread;
-            } else {
+            } elseif ( $away_abbr_u !== '' && $fav_abbr === $away_abbr_u ) {
                 $spread_away = $fav_spread;   // negative → away is favourite
                 $spread_home = -$fav_spread;
             }

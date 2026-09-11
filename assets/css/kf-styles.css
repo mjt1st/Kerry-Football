@@ -2031,9 +2031,15 @@ body.admin-bar .kf-week-sticky-header { top: 32px; }
    --kf-thead-row1-h by kf-table-controls.js — the rows carry player names, live
    subtotals and award badges, so the height is not a constant worth guessing. */
 .kf-table-wrapper.kf-table-frozen {
-    max-height: calc(100vh - 140px);
+    /* 320px floor so a short (landscape phone) viewport still leaves a usable grid; the dvh
+       line follows the vh line so browsers that understand the dynamic viewport stop counting
+       the mobile URL bar, and older ones keep the vh value. */
+    max-height: max(320px, calc(100vh - 140px));
+    max-height: max(320px, calc(100dvh - 140px));
     overflow: auto;
-    overscroll-behavior: contain;
+    /* Deliberately no overscroll-behavior: contain. Scrolling has to chain to the page when
+       the grid reaches its end — containing it trapped wheel and touch scrolling inside a box
+       that fills most of the screen, leaving no easy way to reach what sits below it. */
 }
 
 /* thead's own sticky would fight the per-cell rules below. */
