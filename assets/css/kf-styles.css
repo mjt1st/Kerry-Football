@@ -1024,7 +1024,15 @@
 .kf-table tr.kf-points-duplicate .kf-point-select {
     border: 2px solid #dc3545 !important;
     box-shadow: 0 0 0 2px rgba(220,53,69,0.15);
+    color: #b91c1c;
+    font-weight: 700;
 }
+/* Point values already taken by another game are marked, not disabled (see initSection in
+   kf-player-picks.php). Desktop Chrome, Edge and Firefox honour option colours; phone pickers
+   ignore them, which is why the "(used)" label carries the same information. Options get an
+   explicit colour so a red duplicate select does not tint its whole list. */
+.kf-point-select option { color: #1f2937; font-weight: 400; }
+.kf-point-select option.kf-point-used { color: #b91c1c; }
 
 /* --- Status Badges on Enter Results Page --- */
 .kf-status-badge {

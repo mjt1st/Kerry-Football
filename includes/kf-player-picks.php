@@ -8,7 +8,7 @@
  * - DB SAVE GUARDS: Standard and BPOW saves are fully separated. Only save a section if it has input.
  * - NO CROSS-POLLINATION: BPOW picks never land in Standard (and vice versa).
  * - READBACK: Queries scoped strictly to is_bpow=0 vs is_bpow=1.
- * - INLINE, SCOPED JS: Disables already-picked point values within each section independently.
+ * - INLINE, SCOPED JS: Marks already-picked point values "(used)" within each section independently (1.8.9: marked, no longer disabled).
  * - CLEANUP: Remove duplicate ob_end_clean() usage.
  */
 
@@ -896,7 +896,7 @@ function kf_my_picks_shortcode() {
   /* --- Helpers --- */
   function n(v){ if(v===''||v==null){return null;} var x=parseInt(v,10); return isNaN(x)?null:x; }
 
-  /* --- Point pool: disable used values + highlight duplicates --- */
+  /* --- Point pool: mark used values + highlight duplicates --- */
   function initSection(section){
     if(!section || section.dataset.jsInitialized==='true'){ return; }
     var selects = section.querySelectorAll('.kf-point-select');
@@ -923,11 +923,25 @@ function kf_my_picks_shortcode() {
           }
         }
 
-        // Disable already-used options in every other select
+        if(isDup){ sel.setAttribute('aria-invalid', 'true'); } else { sel.removeAttribute('aria-invalid'); }
+
+        // Mark, don't disable. Disabling a used value made every swap two steps (clear one game,
+        // then give its number to the other), and a greyed-out option in a native picker is easy
+        // to miss. Every value now stays choosable; one already used by ANOTHER game in this
+        // section is labelled "(used)" and coloured red. The label is what carries it on phones:
+        // iOS and Android pickers ignore option colours but always show the text. Duplicates are
+        // still refused on submit by initSubmitGuard below.
         sel.querySelectorAll('option').forEach(function(opt){
           var ov = n(opt.value);
-          if(ov===null){ opt.disabled=false; return; }
-          opt.disabled = (counts[ov] > 0 && ov !== cur);
+          if(!opt.hasAttribute('data-kf-label')){ opt.setAttribute('data-kf-label', opt.textContent); }
+          var base = opt.getAttribute('data-kf-label');
+          var usedElsewhere = (ov !== null) && ((counts[ov] || 0) - (ov === cur ? 1 : 0) > 0);
+          var label = usedElsewhere ? base + ' (used)' : base;
+          opt.disabled = false;
+          // Touch the text only when it changes: this page's body observer re-runs boot() on
+          // every childList change, so a blind rewrite would fire it on every update.
+          if(opt.textContent !== label){ opt.textContent = label; }
+          opt.classList.toggle('kf-point-used', usedElsewhere);
         });
       });
     }
