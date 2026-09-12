@@ -6,7 +6,7 @@ A WordPress plugin for running a **private fantasy-football pick'em league**. Pl
 
 - **Repo root:** `Kerry Football\Code\kerry-football-admin` (this folder is the plugin directory and the git root)
 - **Remote:** `github.com/mjt1st/Kerry-Football`, branch `main`
-- **Version:** `1.8.17` (plugin header in `kerry-football-admin.php`)
+- **Version:** `1.8.18` (plugin header in `kerry-football-admin.php`)
 - **DB schema version:** `1.3` (WP option `kf_db_version`)
 - **Author line:** `Kerry/Gemini` — much of the codebase was written by Gemini; comments carry version tags like `V2.1.6`, `SPORTS API V1`, `LATE PICKS V2.1` that do **not** match the plugin version. Treat them as change markers, not versions.
 
@@ -132,7 +132,11 @@ Direct `$wpdb` calls everywhere. Always `$wpdb->prepare()` interpolated values; 
 
 ## Working on this
 
-There is no build or deploy script. Changes are the PHP/CSS/JS files themselves; the plugin folder is what gets installed. When making a change:
+There is no build or deploy script. Changes are the PHP/CSS/JS files themselves; the plugin folder is what gets installed.
+
+⚠️ **Never build the release zip with PowerShell's `Compress-Archive`.** It writes Windows backslashes as the ZIP path separator; the spec requires `/`. An unzipper reading one of those archives sees no directories at all, only files literally named `kerry-football-admin\includes\kf-notices.php`, so WordPress finds no `kerry-football-admin/kerry-football-admin.php` and the install fails with **"Plugin file does not exist."** — after leaving a junk plugin entry behind in the list. Versions 1.8.15, 1.8.16 and 1.8.17 all shipped that way and none of them could be activated. Symptom to recognise: `[System.IO.Compression.ZipFile]::OpenRead($zip).GetEntry('kerry-football-admin/kerry-football-admin.php')` returns `$null`. Build with a tool that writes forward slashes and verify by *extracting* the zip, not by listing it with a reader that normalises separators. The archive holds the main file, `includes/*.php`, `assets/css/kf-styles.css` and the two `assets/js` scripts — not `Vendor/`, the BACKUP file, the unenqueued `.min.css`, `CLAUDE.md` or `dist/`.
+
+When making a change:
 
 1. Bump the `Version:` header in `kerry-football-admin.php` if the change ships.
 2. If the schema changed, add the `kf_maybe_upgrade_db()` block — a live site never re-runs activation.
