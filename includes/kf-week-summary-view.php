@@ -18,14 +18,19 @@
  */
 
 function kf_week_summary_view() {
-    if (!is_user_logged_in()) return '<p>You must be logged in.</p>';
+    if (!is_user_logged_in()) return kf_notice_login_required( 'this week summary' );
     global $wpdb;
 
     $current_user_id = get_current_user_id();
     $week_id = isset($_GET['week_id']) ? intval($_GET['week_id']) : 0;
 
     if (!$week_id) {
-        return '<p>Invalid week. Please select a valid week from the Season Summary.</p>';
+        return kf_notice_page(
+            'No week chosen',
+            'This page needs to know which week to show.',
+            [ kf_notice_action( 'Season Summary', site_url( '/season-summary/' ) ), kf_notice_action( 'Home', site_url( '/' ) ) ],
+            'info'
+        );
     }
 
     // --- MODIFICATION: Join with seasons table to get season name for export/print titles ---
@@ -37,13 +42,34 @@ function kf_week_summary_view() {
     ));
 
     if ( ! $week ) {
-        return '<p>Week not found. Please select a valid week from the Season Summary.</p>';
+        return kf_notice_page(
+            'That week no longer exists',
+            'The week this link points to has been removed.',
+            [ kf_notice_action( 'Season Summary', site_url( '/season-summary/' ) ), kf_notice_action( 'Home', site_url( '/' ) ) ],
+            'warn'
+        );
     }
 
     // A link to a week in another of the viewer's leagues should simply work: follow it and make
     // that league active, rather than refusing anything outside the session's league.
     if ( ! kf_enter_season_context( (int) $week->season_id ) ) {
-        return '<p>Week not found or belongs to a season you are not part of. Please select a valid week from the Season Summary.</p>';
+        if ( kf_has_pending_invite( (int) $week->season_id ) ) {
+            return kf_notice_page(
+                'You have an invitation waiting',
+                'This week belongs to a league you have been invited to but have not joined yet. Accept the invitation on your Player Dashboard and this page will open.',
+                [
+                    kf_notice_action( 'Player Dashboard', site_url( '/player-dashboard/' ) ),
+                    kf_notice_action( 'Home', site_url( '/' ) ),
+                ],
+                'warn'
+            );
+        }
+        return kf_notice_page(
+            'That week is in a league you are not in',
+            'Ask the commissioner of that league to add you, or pick up where you left off below.',
+            array_merge( [ kf_notice_action( 'Season Summary', site_url( '/season-summary/' ) ), kf_notice_action( 'Home', site_url( '/' ) ) ], kf_league_switch_actions( '/season-summary/' ) ),
+            'warn'
+        );
     }
 
     $is_commissioner = kf_can_manage_season($week->season_id);

@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 function kf_edit_season_form_shortcode() {
     // Security check: User must be logged in.
     if ( ! is_user_logged_in() ) {
-        return '<div class="kf-container"><p>You do not have permission to view this page.</p></div>';
+        return kf_notice_login_required( 'this page' );
     }
 
     if (session_status() === PHP_SESSION_NONE) { session_start(); }
@@ -26,10 +26,20 @@ function kf_edit_season_form_shortcode() {
     // Get the season ID from the session.
     $season_id = isset($_SESSION['kf_active_season_id']) ? (int)$_SESSION['kf_active_season_id'] : 0;
     if (!$season_id) {
-        return '<div class="kf-container"><p>No active season selected. Please select a season from the main menu to edit.</p></div>';
+        return kf_notice_page(
+            'No league selected',
+            'Choose which league you want to edit.',
+            array_merge( [ kf_notice_action( 'Home', site_url( '/' ) ) ], kf_league_switch_actions( '/edit-season/' ) ),
+            'info'
+        );
     }
     if (!kf_can_manage_season($season_id)) {
-        return '<div class="kf-container"><p>You do not have permission to view this page.</p></div>';
+        return kf_notice_page(
+            'You do not run this league',
+            'League settings are for commissioners. If you run a different league, switch to it.',
+            array_merge( [ kf_notice_action( 'Home', site_url( '/' ) ), kf_notice_action( 'Season Summary', site_url( '/season-summary/' ) ) ], kf_league_switch_actions( '/edit-season/', (int) $season_id ) ),
+            'warn'
+        );
     }
 
     $seasons_table = $wpdb->prefix . 'seasons';
@@ -38,7 +48,12 @@ function kf_edit_season_form_shortcode() {
     // Fetch the current season data to populate the form.
     $season = $wpdb->get_row($wpdb->prepare("SELECT * FROM $seasons_table WHERE id = %d", $season_id));
     if (!$season) {
-        return '<div class="kf-container"><p>Season not found.</p></div>';
+        return kf_notice_page(
+            'League not found',
+            'The league you had selected no longer exists.',
+            array_merge( [ kf_notice_action( 'Home', site_url( '/' ) ) ], kf_league_switch_actions( '/edit-season/' ) ),
+            'warn'
+        );
     }
 
     // --- Handle Form Submission ---

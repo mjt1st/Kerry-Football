@@ -397,7 +397,7 @@ function kf_my_picks_shortcode() {
     ob_start();
 
     if (!is_user_logged_in()) {
-        $out = '<div class="kf-container"><p>You must be logged in to make your picks.</p></div>';
+        $out = kf_notice_login_required( 'your picks' );
         ob_end_clean();
         return $out;
     }
@@ -417,7 +417,12 @@ function kf_my_picks_shortcode() {
     // --- Week first (authoritative) ---
     $week_id = isset($_GET['week_id']) ? (int)$_GET['week_id'] : 0;
     if (!$week_id) {
-        $out = '<div class="kf-container"><p>No week was specified.</p></div>';
+        $out = kf_notice_page(
+            'No week chosen',
+            'This page needs to know which week you are picking.',
+            [ kf_notice_action( 'Player Dashboard', site_url( '/player-dashboard/' ) ), kf_notice_action( 'Home', site_url( '/' ) ) ],
+            'info'
+        );
         ob_end_clean();
         return $out;
     }
@@ -425,7 +430,12 @@ function kf_my_picks_shortcode() {
     $weeks_table  = $wpdb->prefix . 'weeks';
     $current_week = $wpdb->get_row($wpdb->prepare("SELECT * FROM $weeks_table WHERE id = %d", $week_id));
     if (!$current_week) {
-        $out = '<div class="kf-container"><p>The requested week could not be found.</p></div>';
+        $out = kf_notice_page(
+            'That week no longer exists',
+            'The week this link points to has been removed.',
+            [ kf_notice_action( 'Player Dashboard', site_url( '/player-dashboard/' ) ), kf_notice_action( 'Home', site_url( '/' ) ) ],
+            'warn'
+        );
         ob_end_clean();
         return $out;
     }
@@ -447,20 +457,35 @@ function kf_my_picks_shortcode() {
         $season_id
     ));
     if (!$active_season_for_dd) {
-        $out = '<div class="kf-container"><p>Season not found for this week.</p></div>';
+        $out = kf_notice_page(
+            'League not found',
+            'The league this week belongs to is missing.',
+            [ kf_notice_action( 'Player Dashboard', site_url( '/player-dashboard/' ) ), kf_notice_action( 'Home', site_url( '/' ) ) ],
+            'error'
+        );
         ob_end_clean();
         return $out;
     }
 
     if ('draft' === $current_week->status && !$is_commissioner) {
-        $out = '<div class="kf-container"><h1>Picks Not Available</h1><p>The matchups for this week have not been published yet. Please check back later.</p></div>';
+        $out = kf_notice_page(
+            'Picks are not open yet',
+            'The commissioner is still setting up this week. You will get an email when picks open.',
+            [ kf_notice_action( 'Player Dashboard', site_url( '/player-dashboard/' ) ), kf_notice_action( 'Home', site_url( '/' ) ) ],
+            'info'
+        );
         ob_end_clean();
         return $out;
     }
 
     $player_info = get_userdata($target_user_id);
     if (!$player_info) {
-        $out = '<div class="kf-container"><p>Invalid player specified.</p></div>';
+        $out = kf_notice_page(
+            'Player not found',
+            'That player does not exist.',
+            [ kf_notice_action( 'Player Dashboard', site_url( '/player-dashboard/' ) ), kf_notice_action( 'Home', site_url( '/' ) ) ],
+            'warn'
+        );
         ob_end_clean();
         return $out;
     }
@@ -470,7 +495,24 @@ function kf_my_picks_shortcode() {
         $target_user_id, $season_id
     ));
     if ($player_status !== 'accepted') {
-        $out = "<div class='kf-container'><p><strong>".esc_html($player_info->display_name)."</strong> is not an active player in this season.</p></div>";
+        // An unanswered invitation looks exactly like being a stranger, and the accept buttons
+        // live on the Player Dashboard with nothing pointing at them.
+        $kf_league_name = $active_season_for_dd->name ?? 'this league';
+        if ( (int) $target_user_id === (int) $current_user_id && $player_status === 'invited' ) {
+            $out = kf_notice_page(
+                'You have an invitation waiting',
+                'You have been invited to ' . $kf_league_name . ' but have not accepted yet. Accept it on your Player Dashboard and your picks will open.',
+                [ kf_notice_action( 'Player Dashboard', site_url( '/player-dashboard/' ) ), kf_notice_action( 'Home', site_url( '/' ) ) ],
+                'warn'
+            );
+        } else {
+            $out = kf_notice_page(
+                'Not in this league',
+                $player_info->display_name . ' is not an active player in ' . $kf_league_name . '.',
+                array_merge( [ kf_notice_action( 'Player Dashboard', site_url( '/player-dashboard/' ) ), kf_notice_action( 'Home', site_url( '/' ) ) ], kf_league_switch_actions( '/player-dashboard/', (int) $season_id ) ),
+                'warn'
+            );
+        }
         ob_end_clean();
         return $out;
     }

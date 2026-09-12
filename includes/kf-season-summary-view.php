@@ -8,7 +8,7 @@
  */
 
 function kf_season_summary_view() {
-    if (!is_user_logged_in()) return '<p>You must be logged in.</p>';
+    if (!is_user_logged_in()) return kf_notice_login_required( 'this season summary' );
     if (session_status() === PHP_SESSION_NONE) { session_start(); }
     
     global $wpdb;
@@ -22,7 +22,12 @@ function kf_season_summary_view() {
     $season = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}seasons WHERE id = %d", $season_id));
     if (!$season) {
         unset($_SESSION['kf_active_season_id']);
-        return '<div class="kf-container"><p>The selected season could not be found. Please select another season.</p></div>';
+        return kf_notice_page(
+            'League not found',
+            'The league you had selected no longer exists.',
+            array_merge( [ kf_notice_action( 'Home', site_url( '/' ) ) ], kf_league_switch_actions( '/season-summary/' ) ),
+            'warn'
+        );
     }
 
     $all_season_players_results = $wpdb->get_results($wpdb->prepare(

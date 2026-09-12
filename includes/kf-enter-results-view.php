@@ -6,7 +6,7 @@
  */
 function kf_enter_results_shortcode() {
     if (!is_user_logged_in()) {
-        return '<div class="kf-container"><p>You do not have access to this page.</p></div>';
+        return kf_notice_login_required( 'this page' );
     }
     if (session_status() === PHP_SESSION_NONE) { session_start(); }
 
@@ -16,9 +16,19 @@ function kf_enter_results_shortcode() {
     if (!$week_id) {
         // Nothing in the URL to go on, so the session's league is all there is.
         if (!$season_id || !kf_can_manage_season($season_id)) {
-            return '<div class="kf-container"><p>You do not have access to this page.</p></div>';
+            return kf_notice_page(
+                'You do not run this league',
+                'Entering results is for commissioners. If you run a different league, switch to it.',
+                array_merge( [ kf_notice_action( 'Home', site_url( '/' ) ), kf_notice_action( 'Season Summary', site_url( '/season-summary/' ) ) ], kf_league_switch_actions( '/manage-weeks/', (int) $season_id ) ),
+                'warn'
+            );
         }
-        return '<div class="kf-container"><h1>Enter Results</h1><p>Could not determine the week or season. Please return to the Manage Weeks page.</p></div>';
+        return kf_notice_page(
+            'No week chosen',
+            'Pick the week you want to enter results for.',
+            [ kf_notice_action( 'Manage Weeks', site_url( '/manage-weeks/' ) ), kf_notice_action( 'Home', site_url( '/' ) ) ],
+            'info'
+        );
     }
     // With a week id, the WEEK decides the league and is authorised below. Gating on the
     // session's league here refused a commissioner of two leagues who followed a link to the
@@ -32,7 +42,12 @@ function kf_enter_results_shortcode() {
     // a link for the other one used to be told the week "is not available for result entry".
     $week = $wpdb->get_row($wpdb->prepare("SELECT * FROM $weeks_table WHERE id = %d", $week_id));
     if ( $week && ! kf_enter_season_context( (int) $week->season_id, true ) ) {
-        return '<div class="kf-container"><p>You do not have access to this week.</p></div>';
+        return kf_notice_page(
+            'That week belongs to another league',
+            'You can only enter results for a league you run.',
+            array_merge( [ kf_notice_action( 'Manage Weeks', site_url( '/manage-weeks/' ) ), kf_notice_action( 'Home', site_url( '/' ) ) ], kf_league_switch_actions( '/manage-weeks/', (int) $season_id ) ),
+            'warn'
+        );
     }
     if ( $week && (int) $week->season_id !== (int) $season_id ) {
         $season_id   = (int) $week->season_id;
@@ -40,7 +55,12 @@ function kf_enter_results_shortcode() {
     }
 
     if (!$week || !in_array($week->status, ['published', 'tie_resolution_needed'], true)) {
-        return '<div class="kf-container"><p>This week is not available for result entry. It must be published and not yet finalized.</p></div>';
+        return kf_notice_page(
+            'Results are not open for this week',
+            'A week has to be published, and not yet finalized, before results can be entered.',
+            [ kf_notice_action( 'Manage Weeks', site_url( '/manage-weeks/' ) ), kf_notice_action( 'Home', site_url( '/' ) ) ],
+            'info'
+        );
     }
 
     // Save results

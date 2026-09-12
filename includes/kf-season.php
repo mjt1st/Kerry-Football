@@ -55,12 +55,17 @@ function kf_get_season_spread_profile( $season_id, $exclude_week_id = 0 ) {
 
 function kf_season_setup_shortcode() {
     if (!is_user_logged_in()) {
-        return '<p>You must be logged in to view this page.</p>';
+        return kf_notice_login_required( 'this page' );
     }
 
     $user = wp_get_current_user();
     if (!in_array('commissioner', (array) $user->roles)) {
-        return '<p>You do not have access to this page.</p>';
+        return kf_notice_page(
+            'Commissioners only',
+            'Setting up a season is for people who run a league.',
+            [ kf_notice_action( 'Home', site_url( '/' ) ), kf_notice_action( 'Player Dashboard', site_url( '/player-dashboard/' ) ), kf_notice_action( 'Season Summary', site_url( '/season-summary/' ) ) ],
+            'warn'
+        );
     }
 
     ob_start();

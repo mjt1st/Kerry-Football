@@ -2097,6 +2097,61 @@ body.admin-bar .kf-week-sticky-header { top: 32px; }
 }
 #kf-matchup-note:empty { display: none; }
 
+/* --- Dead-end pages with a way out (kf-notices.php) --- */
+.kf-notice-card {
+    max-width: 640px;
+    margin: 2em auto;
+    padding: 24px 28px;
+    background-color: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-left: 5px solid var(--kf-primary-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+.kf-notice-card.kf-notice-warn  { border-left-color: #d97706; }
+.kf-notice-card.kf-notice-error { border-left-color: var(--kf-danger-color); }
+/* Specific enough to beat `.kf-container h2`, which otherwise adds a divider rule, a 1.5em top
+   margin and a larger size that the card does not want. */
+.kf-container .kf-notice-title {
+    margin: 0 0 .4em;
+    padding: 0;
+    border: none;
+    font-size: 1.35em;
+    color: #1a202c;
+}
+.kf-notice-message { margin: 0 0 1.2em; color: #4b5563; }
+
+/* Scoped to the notice card: .kf-button is an empty rule and .kf-button-primary /
+   -secondary have none at all, so these buttons have to carry their own look. */
+.kf-notice-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.kf-notice-actions .kf-button {
+    display: inline-block;
+    padding: 10px 18px;
+    border: 1px solid var(--kf-primary-color);
+    border-radius: 5px;
+    font-weight: 600;
+    line-height: 1.2;
+    text-decoration: none;
+    cursor: pointer;
+}
+.kf-notice-actions .kf-button-primary {
+    background-color: var(--kf-primary-color);
+    color: #ffffff;
+}
+.kf-notice-actions .kf-button-secondary {
+    background-color: #ffffff;
+    color: var(--kf-primary-color);
+}
+.kf-notice-actions .kf-button:hover { opacity: .88; }
+
+/* The league a season-scoped page is showing, under its heading. */
+.kf-league-context {
+    margin: -.4em 0 1em;
+    color: #6b7280;
+    font-weight: 600;
+    letter-spacing: .02em;
+}
+
 /* --- Picks CSV export bar --- */
 .kf-export-bar {
     display: flex;

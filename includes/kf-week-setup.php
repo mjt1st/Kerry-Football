@@ -22,7 +22,7 @@
 
 function kf_week_setup_form() {
     // Standard security and session checks
-    if (!is_user_logged_in()) { return '<p>You do not have access to this page.</p>'; }
+    if (!is_user_logged_in()) { return kf_notice_login_required( 'this page' ); }
     if (session_status() === PHP_SESSION_NONE) { session_start(); }
 
     global $wpdb;
@@ -44,20 +44,53 @@ function kf_week_setup_form() {
 
     if ($edit_mode) {
         $week = $wpdb->get_row($wpdb->prepare("SELECT * FROM $weeks_table WHERE id = %d", $week_id));
-        if (!$week) { return '<div class="kf-container"><h1>Week Setup</h1><p>Week not found.</p></div>'; }
+        if (!$week) {
+            return kf_notice_page(
+                'That week no longer exists',
+                'The week this link points to has been removed.',
+                [ kf_notice_action( 'Manage Weeks', site_url( '/manage-weeks/' ) ), kf_notice_action( 'Home', site_url( '/' ) ) ],
+                'warn'
+            );
+        }
         if (!kf_enter_season_context((int) $week->season_id, true)) {
-            return '<p>You do not have access to this week.</p>';
+            return kf_notice_page(
+                'That week belongs to another league',
+                'You can only set up weeks in a league you run.',
+                array_merge( [ kf_notice_action( 'Manage Weeks', site_url( '/manage-weeks/' ) ), kf_notice_action( 'Home', site_url( '/' ) ) ], kf_league_switch_actions( '/manage-weeks/' ) ),
+                'warn'
+            );
         }
         $season_id = (int) $week->season_id;
     } else {
         $season_id = $_SESSION['kf_active_season_id'] ?? 0;
-        if (!$season_id) { return '<div class="kf-container"><h1>Week Setup</h1><p>No season selected.</p></div>'; }
-        if (!kf_can_manage_season($season_id)) { return '<p>You do not have access to this page.</p>'; }
+        if (!$season_id) {
+            return kf_notice_page(
+                'No league selected',
+                'Choose which league you want to set a week up in.',
+                array_merge( [ kf_notice_action( 'Home', site_url( '/' ) ) ], kf_league_switch_actions( '/manage-weeks/' ) ),
+                'info'
+            );
+        }
+        if (!kf_can_manage_season($season_id)) {
+            return kf_notice_page(
+                'You do not run this league',
+                'Setting up weeks is for commissioners. If you run a different league, switch to it.',
+                array_merge( [ kf_notice_action( 'Home', site_url( '/' ) ), kf_notice_action( 'Season Summary', site_url( '/season-summary/' ) ) ], kf_league_switch_actions( '/manage-weeks/', (int) $season_id ) ),
+                'warn'
+            );
+        }
     }
 
     // Fetch the season settings, which are crucial for defaults and validation
     $season = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}seasons WHERE id = %d", $season_id));
-    if (!$season) { return '<p>Invalid season selected.</p>'; }
+    if (!$season) {
+        return kf_notice_page(
+            'League not found',
+            'The league this week belongs to no longer exists.',
+            array_merge( [ kf_notice_action( 'Home', site_url( '/' ) ) ], kf_league_switch_actions( '/manage-weeks/' ) ),
+            'warn'
+        );
+    }
 
     $is_matchup_editable = true; // Can the matchups themselves be changed?
     $is_repair_mode = false;     // Is this a special case to fix a broken week?

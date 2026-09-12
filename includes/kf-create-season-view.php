@@ -20,13 +20,18 @@ if ( ! defined( 'ABSPATH' ) ) {
 function kf_create_season_shortcode() {
     // Security Check: Ensure the user is logged in.
     if (!is_user_logged_in()) {
-        return '<p>You must be logged in to view this page.</p>';
+        return kf_notice_login_required( 'this page' );
     }
 
     // Security Check: Ensure the user has the 'commissioner' role.
     $user = wp_get_current_user();
     if (!current_user_can('manage_options')) { // Use capability check instead of role name for better compatibility
-        return '<p>You do not have access to this page.</p>';
+        return kf_notice_page(
+            'Commissioners only',
+            'Creating a league is for commissioners.',
+            [ kf_notice_action( 'Home', site_url( '/' ) ), kf_notice_action( 'Player Dashboard', site_url( '/player-dashboard/' ) ) ],
+            'warn'
+        );
     }
 
     // Start output buffering to capture HTML.

@@ -9,7 +9,7 @@
 
 function kf_manage_weeks_view_shortcode() {
     if (!is_user_logged_in()) {
-        return '<div class="kf-container"><p>You do not have access to this page.</p></div>';
+        return kf_notice_login_required( 'this page' );
     }
     if (session_status() === PHP_SESSION_NONE) { session_start(); }
 
@@ -18,16 +18,33 @@ function kf_manage_weeks_view_shortcode() {
     $season_id = $_SESSION['kf_active_season_id'] ?? 0;
 
     if (!$season_id) {
-        return '<div class="kf-container"><h1>Manage Weeks</h1><p>No active season selected. Please create or activate a season.</p></div>';
+        return kf_notice_page(
+            'No league selected',
+            'Choose which league you want to manage weeks for.',
+            array_merge( [ kf_notice_action( 'Home', site_url( '/' ) ) ], kf_league_switch_actions( '/manage-weeks/' ) ),
+            'info'
+        );
     }
     if (!kf_can_manage_season($season_id)) {
-        return '<div class="kf-container"><p>You do not have access to this page.</p></div>';
+        return kf_notice_page(
+            'You do not run this league',
+            'Managing weeks is for commissioners. If you run a different league, switch to it.',
+            array_merge( [ kf_notice_action( 'Home', site_url( '/' ) ), kf_notice_action( 'Season Summary', site_url( '/season-summary/' ) ) ], kf_league_switch_actions( '/manage-weeks/', (int) $season_id ) ),
+            'warn'
+        );
     }
 
     $weeks_table = $wpdb->prefix . 'weeks';
     $season_table = $wpdb->prefix . 'seasons';
     $season = $wpdb->get_row($wpdb->prepare("SELECT * FROM $season_table WHERE id = %d", $season_id));
-    if (!$season) { return '<div class="kf-container"><p>The selected season could not be found.</p></div>';}
+    if (!$season) {
+        return kf_notice_page(
+            'League not found',
+            'The league you had selected no longer exists.',
+            array_merge( [ kf_notice_action( 'Home', site_url( '/' ) ) ], kf_league_switch_actions( '/manage-weeks/' ) ),
+            'warn'
+        );
+    }
 
     // --- Handle Actions (Publish, Unpublish) ---
     if (isset($_GET['action']) && isset($_GET['week_id']) && isset($_GET['_wpnonce'])) {
@@ -43,7 +60,12 @@ function kf_manage_weeks_view_shortcode() {
             "SELECT submission_deadline, season_id FROM $weeks_table WHERE id = %d", $week_id
         ));
         if ( ! $week_info || ! kf_can_manage_season( (int) $week_info->season_id ) ) {
-            return '<div class="kf-container"><p>You do not have access to that week.</p></div>';
+            return kf_notice_page(
+                'That week belongs to another league',
+                'You can only publish or unpublish weeks in a league you run.',
+                array_merge( [ kf_notice_action( 'Home', site_url( '/' ) ) ], kf_league_switch_actions( '/manage-weeks/' ) ),
+                'warn'
+            );
         }
 
         if ($action === 'publish' && wp_verify_nonce($nonce, 'kf_publish_week_' . $week_id)) {

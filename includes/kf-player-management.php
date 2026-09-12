@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 function kf_player_management_shortcode() {
     // Security check: Ensure user is a logged-in commissioner.
     if ( ! is_user_logged_in() ) {
-        return '<div class="kf-container"><p>You do not have permission to access this page.</p></div>';
+        return kf_notice_login_required( 'this page' );
     }
 
     if (session_status() === PHP_SESSION_NONE) { session_start(); }
@@ -25,10 +25,20 @@ function kf_player_management_shortcode() {
 
     $season_id = isset($_SESSION['kf_active_season_id']) ? (int)$_SESSION['kf_active_season_id'] : 0;
     if ( ! $season_id ) {
-        return '<div class="kf-container"><h1>Manage Players</h1><p>No season selected. Please choose a season from the main menu to manage players.</p></div>';
+        return kf_notice_page(
+            'No league selected',
+            'Choose which league you want to manage players for.',
+            array_merge( [ kf_notice_action( 'Home', site_url( '/' ) ) ], kf_league_switch_actions( '/manage-players/' ) ),
+            'info'
+        );
     }
     if ( ! kf_can_manage_season( $season_id ) ) {
-        return '<div class="kf-container"><p>You do not have permission to access this page.</p></div>';
+        return kf_notice_page(
+            'You do not run this league',
+            'Managing players is for commissioners. If you run a different league, switch to it.',
+            array_merge( [ kf_notice_action( 'Home', site_url( '/' ) ), kf_notice_action( 'Season Summary', site_url( '/season-summary/' ) ) ], kf_league_switch_actions( '/manage-players/', (int) $season_id ) ),
+            'warn'
+        );
     }
 
     // Only site admins and season creators (not co-commissioners) may grant/revoke co-commissioner status.
@@ -44,7 +54,12 @@ function kf_player_management_shortcode() {
 
     $season_name = $wpdb->get_var( $wpdb->prepare( "SELECT name FROM $seasons_table WHERE id = %d", $season_id ) );
     if ( ! $season_name ) {
-        return '<div class="kf-container"><p>The selected season could not be found.</p></div>';
+        return kf_notice_page(
+            'League not found',
+            'The league you had selected no longer exists.',
+            array_merge( [ kf_notice_action( 'Home', site_url( '/' ) ) ], kf_league_switch_actions( '/manage-players/' ) ),
+            'warn'
+        );
     }
 
     // --- Handle Form Submissions (Add, Update, Remove) ---

@@ -20,7 +20,7 @@ if (!function_exists('ordinal')) {
 }
 
 function kf_player_dashboard_view() {
-    if (!is_user_logged_in()) { return '<div class="kf-container"><p>You must be logged in to view this page.</p></div>'; }
+    if (!is_user_logged_in()) { return kf_notice_login_required( 'your dashboard' ); }
     if (session_status() === PHP_SESSION_NONE) { session_start(); }
 
     global $wpdb;
@@ -60,12 +60,22 @@ function kf_player_dashboard_view() {
     ) );
 
     if (!$season_id) {
-        return '<div class="kf-container"><h1>Player Dashboard</h1><p>Please select a season from the main menu to view your dashboard.</p></div>';
+        return kf_notice_page(
+            'No league selected',
+            'Choose which league you want to see.',
+            array_merge( [ kf_notice_action( 'Home', site_url( '/' ) ) ], kf_league_switch_actions( '/player-dashboard/' ) ),
+            'info'
+        );
     }
 
     $active_season = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}seasons WHERE id = %d", $season_id));
     if (!$active_season) {
-        return '<div class="kf-container"><p>The selected season could not be found.</p></div>';
+        return kf_notice_page(
+            'League not found',
+            'The league you had selected no longer exists.',
+            array_merge( [ kf_notice_action( 'Home', site_url( '/' ) ) ], kf_league_switch_actions( '/player-dashboard/' ) ),
+            'warn'
+        );
     }
 
     $is_commissioner = kf_can_manage_season($season_id);
@@ -162,6 +172,7 @@ function kf_player_dashboard_view() {
 
         <div class="kf-dashboard-header">
             <h1><?php echo esc_html($player_info->display_name); ?>'s Dashboard</h1>
+            <p class="kf-league-context"><?php echo esc_html( $active_season->name ); ?></p>
             <?php if ($is_active_player): ?>
                 <div class="kf-subheader-stats">
                     <span><strong>Season Score:</strong> <?php echo $player_total_score; ?></span>

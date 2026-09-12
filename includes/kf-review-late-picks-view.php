@@ -11,18 +11,29 @@
 function kf_review_late_picks_view() {
     // Ensure user is a logged-in commissioner
     if (!is_user_logged_in()) {
-        return '<p>You do not have permission to view this page.</p>';
+        return kf_notice_login_required( 'this page' );
     }
     // REMOVED UNSAFE SESSION START: if (session_status() === PHP_SESSION_NONE) { session_start(); }
 
     global $wpdb;
     $season_id = isset($_SESSION['kf_active_season_id']) ? (int)$_SESSION['kf_active_season_id'] : 0;
     if (!$season_id) {
-        return '<div class="kf-container"><h1>Review Late Submissions</h1><p>Please select an active season from the main menu.</p></div>';
+        return kf_notice_page(
+            'No league selected',
+            'Choose which league you want to review late picks for.',
+            array_merge( [ kf_notice_action( 'Home', site_url( '/' ) ) ], kf_league_switch_actions( '/review-late-picks/' ) ),
+            'info'
+        );
     }
     if (!kf_can_manage_season($season_id)) {
-        return '<p>You do not have permission to view this page.</p>';
+        return kf_notice_page(
+            'You do not run this league',
+            'Reviewing late picks is for commissioners. If you run a different league, switch to it.',
+            array_merge( [ kf_notice_action( 'Home', site_url( '/' ) ), kf_notice_action( 'Season Summary', site_url( '/season-summary/' ) ) ], kf_league_switch_actions( '/review-late-picks/', (int) $season_id ) ),
+            'warn'
+        );
     }
+    $kf_league_name = (string) $wpdb->get_var( $wpdb->prepare( "SELECT name FROM {$wpdb->prefix}seasons WHERE id = %d", $season_id ) );
 
     $pending_picks_table = $wpdb->prefix . 'pending_picks';
     $picks_table = $wpdb->prefix . 'picks';
@@ -103,6 +114,7 @@ function kf_review_late_picks_view() {
     ?>
     <div class="kf-container">
         <h1>Review Late Submissions</h1>
+        <p class="kf-league-context"><?php echo esc_html( $kf_league_name ); ?></p>
         <p>The following picks were submitted by players after the weekly deadline. You can approve or decline them here.</p>
         
         <div class="kf-table-wrapper">

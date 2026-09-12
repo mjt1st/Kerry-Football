@@ -19,7 +19,12 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 function kf_api_settings_shortcode() {
     if ( ! is_user_logged_in() || ! current_user_can( 'manage_options' ) ) {
-        return '<div class="kf-container"><p>You do not have access to this page.</p></div>';
+        return kf_notice_page(
+            'Commissioners only',
+            'API settings are for people who run a league.',
+            [ kf_notice_action( 'Home', site_url( '/' ) ), kf_notice_action( 'Player Dashboard', site_url( '/player-dashboard/' ) ) ],
+            'warn'
+        );
     }
 
     global $wpdb;

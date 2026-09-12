@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
 
 function kf_notification_settings_view() {
     if (!is_user_logged_in()) {
-        return '<p>You must be logged in to view this page.</p>';
+        return kf_notice_login_required( 'your notification settings' );
     }
 
     global $wpdb;

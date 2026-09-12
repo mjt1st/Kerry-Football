@@ -9,7 +9,12 @@
 
 function kf_commissioner_dashboard_shortcode() {
     if (!is_user_logged_in() || !kf_is_any_commissioner()) {
-        return '<p>You do not have access to this page.</p>';
+        return kf_notice_page(
+            'Commissioners only',
+            'This page is for people who run a league.',
+            [ kf_notice_action( 'Home', site_url( '/' ) ), kf_notice_action( 'Player Dashboard', site_url( '/player-dashboard/' ) ) ],
+            'warn'
+        );
     }
 
     global $wpdb;
