@@ -714,8 +714,21 @@ document.addEventListener('DOMContentLoaded', function() {
             table.classList.toggle('kf-compact', state.compact);
 
             // The player header spans Pick + Points; with Points hidden it spans one.
-            table.querySelectorAll('thead th[colspan="2"]').forEach(function (th) {
-                th.setAttribute('colspan', state.hidePoints ? '1' : '2');
+            //
+            // Drive this from the colspan the markup shipped with, remembered on first run.
+            // The old selector was th[colspan="2"], so the moment Hide points set them to 1 it
+            // matched nothing and unticking could never put them back: the header cells stayed
+            // half width for the life of the page while the data columns went back to full
+            // width, so the names drifted further left across the row — the misaligned header
+            // people were seeing. The setting is remembered per browser, so the page could also
+            // come back in that state after a reload.
+            table.querySelectorAll('thead tr:first-child th').forEach(function (th) {
+                if (!th.hasAttribute('data-kf-colspan')) {
+                    th.setAttribute('data-kf-colspan', th.getAttribute('colspan') || '1');
+                }
+                if (th.getAttribute('data-kf-colspan') === '2') {
+                    th.setAttribute('colspan', state.hidePoints ? '1' : '2');
+                }
             });
 
             save(state);
