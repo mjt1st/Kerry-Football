@@ -269,7 +269,9 @@ function kf_cron_check_scores() {
 
     // Update each matchup with fresh score data
     foreach ( $pending_matchups as $matchup ) {
-        $game = $scores[ $matchup->espn_game_id ] ?? null;
+        // Trimmed on both sides: kf_group_event_ids_by_sport() trims before fetching, so a
+        // stored id with stray whitespace would otherwise fetch fine and then never match here.
+        $game = $scores[ trim( (string) $matchup->espn_game_id ) ] ?? null;
         if ( ! $game ) {
             continue;
         }
@@ -449,13 +451,15 @@ function kf_refresh_week_scores( $week_id ) {
         return [
             'updated' => 0,
             'message' => 'ESPN returned none of the ' . count( $event_ids ) . ' linked game(s) for this week ('
-                . esc_html( $default_sport ) . '). The request may have timed out or been refused — the site error log has the detail.',
+                . $default_sport . '). The request may have timed out or been refused — the site error log has the detail.',
         ];
     }
 
     $updated = 0;
     foreach ( $matchups as $matchup ) {
-        $game = $scores[ $matchup->espn_game_id ] ?? null;
+        // Trimmed on both sides: kf_group_event_ids_by_sport() trims before fetching, so a
+        // stored id with stray whitespace would otherwise fetch fine and then never match here.
+        $game = $scores[ trim( (string) $matchup->espn_game_id ) ] ?? null;
         if ( ! $game ) {
             continue;
         }
