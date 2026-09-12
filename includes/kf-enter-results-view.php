@@ -54,7 +54,15 @@ function kf_enter_results_shortcode() {
         $season_name = $wpdb->get_var($wpdb->prepare("SELECT name FROM {$wpdb->prefix}seasons WHERE id = %d", $season_id));
     }
 
-    if (!$week || !in_array($week->status, ['published', 'tie_resolution_needed'], true)) {
+    if (!$week) {
+        return kf_notice_page(
+            'That week no longer exists',
+            'The week this link points to has been removed.',
+            [ kf_notice_action( 'Manage Weeks', site_url( '/manage-weeks/' ) ), kf_notice_action( 'Home', site_url( '/' ) ) ],
+            'warn'
+        );
+    }
+    if (!in_array($week->status, ['published', 'tie_resolution_needed'], true)) {
         return kf_notice_page(
             'Results are not open for this week',
             'A week has to be published, and not yet finalized, before results can be entered.',

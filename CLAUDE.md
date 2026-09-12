@@ -6,7 +6,7 @@ A WordPress plugin for running a **private fantasy-football pick'em league**. Pl
 
 - **Repo root:** `Kerry Football\Code\kerry-football-admin` (this folder is the plugin directory and the git root)
 - **Remote:** `github.com/mjt1st/Kerry-Football`, branch `main`
-- **Version:** `1.8.16` (plugin header in `kerry-football-admin.php`)
+- **Version:** `1.8.17` (plugin header in `kerry-football-admin.php`)
 - **DB schema version:** `1.3` (WP option `kf_db_version`)
 - **Author line:** `Kerry/Gemini` — much of the codebase was written by Gemini; comments carry version tags like `V2.1.6`, `SPORTS API V1`, `LATE PICKS V2.1` that do **not** match the plugin version. Treat them as change markers, not versions.
 
@@ -59,6 +59,8 @@ Three helpers in `includes/kf-season-switcher.php` are the only correct way to c
 
 ⚠️ **A refusal must offer somewhere to go.** Every "no" in this plugin renders through `kf_notice_page()` in `includes/kf-notices.php` — never a bare `return '<p>You do not have access to this page.</p>'`. Because being a commissioner of one league and a player in another is normal here, most refusals are really "not in the league you currently have selected", so league-related ones append `kf_league_switch_actions( $target_path, $exclude_id )`: buttons carrying `kf-season-select-and-go` + `data-season-id` + `data-redirect-url`, the same handler the homepage cards use, which switches the session league and then follows the link. Being *invited but not accepted* looks identical to being a stranger and the accept buttons only exist on the Player Dashboard, so the picks page and week summary check for that case first and point there. `kf_notice_page()` escapes the title and message itself — pass raw strings, never pre-escaped ones. `.kf-notice-*` styles are self-contained on purpose: `.kf-button` is an empty rule in this stylesheet and `.kf-button-primary`/`-secondary` have none, and `.kf-container h2` would otherwise override the card's heading.
 
+⚠️ **The Player Dashboard is the only place an invitation can be answered**, so it must never refuse a player who has one. It fetched `$pending_invitations` and then returned "no season selected" before rendering them, which stranded exactly the players every "accept it on your Player Dashboard" message is aimed at — someone invited to their first league has no active season by definition. It now returns `kf_render_invite_banners()` on its own in that case; that helper is shared with the normal dashboard so the two cannot drift apart.
+
 A user qualifies if they have `manage_options`, created the season (`seasons.created_by`), or are an accepted member flagged `season_players.is_commissioner = 1` (the co-commissioner role). Note the docblock on `kf_can_manage_season` still says site admins are *not* auto-granted — that is stale; the code grants them and commit `6db1bcc` made that deliberate.
 
 Never gate league features on `current_user_can('manage_options')` alone — that locks out co-commissioners, which was the bug behind `52de52a`. `manage_options` is correct only for genuinely site-level things: the admin dashboard, API settings, and granting/revoking co-commissioner (deliberately restricted to admins and season creators so co-commissioners cannot escalate each other).
@@ -91,6 +93,7 @@ Direct `$wpdb` calls everywhere. Always `$wpdb->prepare()` interpolated values; 
 - Everything is prefixed `kf_` — functions, options, AJAX actions, nonces, CSS classes.
 - Every file starts with `if ( ! defined( 'ABSPATH' ) ) exit;`.
 - `kf-enter-results-view.php` was written with **curly quotes** (`class=”x”`) throughout its markup, which browsers parse as part of the attribute value — the "Refresh Scores Now" button never fired because `type=”button”` is not a valid type and its `onclick` was not valid JS. Repaired in 1.5.4; watch for the same in any file that came from a word processor.
+- ⚠️ **Never write a literal `</script>` inside an inline `<script>` block** — not in a string, not in a comment. The HTML parser does not know JS syntax, so the first one it meets ends the block: everything after it renders as page text and every later script on the page dies with `Unexpected end of input`. A comment in `kf-week-summary-view.php` explaining `wp_json_encode`'s slash escaping did exactly that in 1.8.17 and took the whole week summary's inline script with it. Spell the tag out in words, or break it as `<\/script>`. Server-printed JSON is safe because `wp_json_encode` escapes the slash by default; `JSON_HEX_TAG` (as `kf-player-picks.php` uses) makes that explicit.
 - `kf-enqueue-scripts.php` omits the closing `?>` deliberately — stray whitespace after it caused blank-screen bugs. Don't add one back.
 - **Nonces are per-form, not global.** `kf_add_player_nonce`, `kf_submit_picks_nonce`, `kf_finalize_week_nonce`, `kf_results_nonce`, etc. Only two are used for AJAX: `kf_season_switcher_nonce` (the one localized to JS as `kf_ajax_data.nonce`) and `kf_ajax_nonce`. Match the existing name for the surface you're touching rather than inventing one.
 - Asset versions use `filemtime()` so caches bust automatically — keep that pattern (`e52e0d0`).

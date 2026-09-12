@@ -1164,8 +1164,13 @@ function kf_week_summary_view() {
            and cell text from textContent, so the file is the same whichever view-control
            checkboxes happen to be ticked. */
         (function(){
-            var TITLE    = '<?php echo esc_js($week->season_name . " - Week " . $week->week_number . " Summary"); ?>';
-            var FILENAME = '<?php echo esc_js(sanitize_title($week->season_name . '-week-' . $week->week_number)); ?>.csv';
+            // wp_json_encode, not esc_js: esc_js HTML-encodes its input, so a season named
+            // "COLLEGE & PRO" reached the file as "COLLEGE &amp; PRO" — entities are not
+            // decoded inside a script block. json_encode also escapes the slash in a closing
+            // script tag, so the value cannot end the block either. (Which is why this comment
+            // spells that tag out in words: a literal one here would close the block itself.)
+            var TITLE    = <?php echo wp_json_encode( $week->season_name . ' - Week ' . $week->week_number . ' Summary' ); ?>;
+            var FILENAME = <?php echo wp_json_encode( ( sanitize_title( $week->season_name . '-week-' . $week->week_number ) ?: 'week-summary' ) . '.csv' ); ?>;
 
             function cellText(cell){
                 var head = cell.querySelector('.kf-header-cell-content');

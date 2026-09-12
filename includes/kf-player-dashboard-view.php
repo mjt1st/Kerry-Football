@@ -19,6 +19,40 @@ if (!function_exists('ordinal')) {
     }
 }
 
+/**
+ * The accept/decline banners for a player's unanswered invitations.
+ *
+ * Shared, because the dashboard renders them in two places: above a normal dashboard, and on
+ * its own for a player who has no league yet — that player has nowhere else these buttons
+ * appear, and every "accept it on your Player Dashboard" message in the plugin points here.
+ *
+ * @param array $invitations Rows of {id, name} from season_players where status = 'invited'.
+ * @return string HTML.
+ */
+function kf_render_invite_banners( $invitations ) {
+    if ( empty( $invitations ) ) {
+        return '';
+    }
+    ob_start();
+    foreach ( $invitations as $invite ) : ?>
+        <div class="kf-invite-banner">
+            <div class="kf-invite-banner-text">
+                <strong>&#127944; You've been invited to join <em><?php echo esc_html( $invite->name ); ?></em>!</strong>
+                <span>Do you want to participate in this season?</span>
+            </div>
+            <div class="kf-invite-banner-actions">
+                <form method="POST" style="display:inline;">
+                    <?php wp_nonce_field( 'kf_invite_response_action', 'kf_invite_nonce' ); ?>
+                    <input type="hidden" name="invite_season_id" value="<?php echo esc_attr( $invite->id ); ?>">
+                    <button type="submit" name="kf_invite_response" value="accepted" class="kf-button kf-button-action">&#10003; Accept</button>
+                    <button type="submit" name="kf_invite_response" value="declined" class="kf-button kf-button-secondary" style="margin-left:6px;">&#10007; Decline</button>
+                </form>
+            </div>
+        </div>
+    <?php endforeach;
+    return ob_get_clean();
+}
+
 function kf_player_dashboard_view() {
     if (!is_user_logged_in()) { return kf_notice_login_required( 'your dashboard' ); }
     if (session_status() === PHP_SESSION_NONE) { session_start(); }
@@ -60,9 +94,20 @@ function kf_player_dashboard_view() {
     ) );
 
     if (!$season_id) {
+        // A player whose only tie to the site is an unanswered invitation has no active season,
+        // so this used to send them away with nothing to click — including when the picks page
+        // or a week summary had just told them to come here and accept. These buttons exist
+        // nowhere else.
+        if ( ! empty( $pending_invitations ) ) {
+            return '<div class="kf-container">'
+                 . '<div class="kf-dashboard-header"><h1>Your invitations</h1>'
+                 . '<p class="kf-league-context">Accept one and your dashboard opens.</p></div>'
+                 . kf_render_invite_banners( $pending_invitations )
+                 . '</div>';
+        }
         return kf_notice_page(
             'No league selected',
-            'Choose which league you want to see.',
+            'You are not in a league yet. A commissioner has to invite you; the invitation will show up here.',
             array_merge( [ kf_notice_action( 'Home', site_url( '/' ) ) ], kf_league_switch_actions( '/player-dashboard/' ) ),
             'info'
         );
@@ -153,22 +198,8 @@ function kf_player_dashboard_view() {
     <div class="kf-container">
 
         <?php // --- Pending Invitation Banners --- ?>
-        <?php foreach ( $pending_invitations as $invite ) : ?>
-            <div class="kf-invite-banner">
-                <div class="kf-invite-banner-text">
-                    <strong>&#127944; You've been invited to join <em><?php echo esc_html( $invite->name ); ?></em>!</strong>
-                    <span>Do you want to participate in this season?</span>
-                </div>
-                <div class="kf-invite-banner-actions">
-                    <form method="POST" style="display:inline;">
-                        <?php wp_nonce_field( 'kf_invite_response_action', 'kf_invite_nonce' ); ?>
-                        <input type="hidden" name="invite_season_id" value="<?php echo esc_attr( $invite->id ); ?>">
-                        <button type="submit" name="kf_invite_response" value="accepted" class="kf-button kf-button-action">&#10003; Accept</button>
-                        <button type="submit" name="kf_invite_response" value="declined" class="kf-button kf-button-secondary" style="margin-left:6px;">&#10007; Decline</button>
-                    </form>
-                </div>
-            </div>
-        <?php endforeach; ?>
+        <?php echo kf_render_invite_banners( $pending_invitations ); ?>
+
 
         <div class="kf-dashboard-header">
             <h1><?php echo esc_html($player_info->display_name); ?>'s Dashboard</h1>
