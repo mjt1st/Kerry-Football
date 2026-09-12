@@ -36,8 +36,21 @@ function kf_week_summary_view() {
         $week_id
     ));
 
-    if (!$week || $week->season_id != ($_SESSION['kf_active_season_id'] ?? 0)) {
-        return '<p>Week not found or does not belong to the active season. Please select a valid week from the Season Summary.</p>';
+    if ( ! $week ) {
+        return '<p>Week not found. Please select a valid week from the Season Summary.</p>';
+    }
+
+    // A link to a week in another of the viewer's leagues should simply work. This used to
+    // refuse anything outside the active season, which — combined with players being unable to
+    // switch seasons at all — meant a player in two leagues could only ever open one league's
+    // summaries. Follow the link and make that season active instead.
+    if ( (int) $week->season_id !== (int) ( $_SESSION['kf_active_season_id'] ?? 0 ) ) {
+        if ( ! kf_can_access_season( (int) $week->season_id ) ) {
+            return '<p>Week not found or belongs to a season you are not part of. Please select a valid week from the Season Summary.</p>';
+        }
+        if ( session_status() === PHP_SESSION_NONE && ! headers_sent() ) { session_start(); }
+        $_SESSION['kf_active_season_id'] = (int) $week->season_id;
+        delete_transient( 'kf_default_season_' . get_current_user_id() );
     }
 
     $is_commissioner = kf_can_manage_season($week->season_id);

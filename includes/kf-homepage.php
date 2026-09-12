@@ -121,6 +121,16 @@ function kf_get_card_data_for_season( $season_id, $user_id, $is_commissioner ) {
         $season_id
     ) );
 
+    // The week a "Week N Summary" link should point at: the newest week players can actually
+    // see. Drafts are excluded — their matchups are still being built — but a finalized week
+    // is included, so the link keeps working between weeks instead of disappearing.
+    $data['summary_week'] = $wpdb->get_row( $wpdb->prepare(
+        "SELECT * FROM {$wpdb->prefix}weeks
+         WHERE season_id = %d AND status <> 'draft'
+         ORDER BY week_number DESC LIMIT 1",
+        $season_id
+    ) );
+
     // Player count.
     $data['player_count'] = (int) $wpdb->get_var( $wpdb->prepare(
         "SELECT COUNT(id) FROM {$wpdb->prefix}season_players WHERE season_id = %d AND status = 'accepted'",
@@ -258,6 +268,7 @@ if ( ! function_exists( 'kf_render_season_card' ) ) {
 
         $current_week    = $card_data['current_week_published'] ?? null; // last published week
         $latest_week_any = $card_data['latest_week_any'] ?? null;        // newest week of any status
+        $summary_week    = $card_data['summary_week'] ?? null;           // newest non-draft week
         $is_also_player  = $card_data['is_also_player'] ?? false;
 
         // Player-facing variables.
@@ -374,6 +385,22 @@ if ( ! function_exists( 'kf_render_season_card' ) ) {
                            class="kf-season-select-and-go"
                            data-season-id="<?php echo esc_attr( $season->id ); ?>"
                            data-redirect-url="<?php echo esc_url( site_url( '/edit-season/' ) ); ?>">Edit Season</a>
+                    </div>
+                <?php endif; ?>
+
+                <?php
+                // Every card gets a direct route to the week summary. Reaching it used to mean
+                // knowing the week id and typing /week-summary/?week_id=N by hand. Rendered for
+                // players and commissioners alike, and outside both blocks so a commissioner who
+                // also plays gets one link rather than two.
+                if ( $summary_week ) : ?>
+                    <div class="kf-card-quick-links">
+                        <a href="#"
+                           class="kf-season-select-and-go"
+                           data-season-id="<?php echo esc_attr( $season->id ); ?>"
+                           data-redirect-url="<?php echo esc_url( site_url( '/week-summary/?week_id=' . (int) $summary_week->id ) ); ?>">
+                            Week <?php echo esc_html( $summary_week->week_number ); ?> Summary
+                        </a>
                     </div>
                 <?php endif; ?>
             </div>

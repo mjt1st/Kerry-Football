@@ -49,6 +49,45 @@ function kf_can_manage_season( $season_id, $user_id = null ) {
 }
 
 /**
+ * Can this user USE this season at all — see its summaries, switch to it, open its weeks?
+ *
+ * Distinct from kf_can_manage_season(), which is the commissioner check (admin, creator, or an
+ * accepted member flagged is_commissioner). Ordinary players are accepted members with that flag
+ * off, so the manage check refused them — and it was guarding season switching and the active
+ * season stored in the session, not just commissioner actions. The effect was that a player in
+ * two leagues could not switch between them: every request cleared their chosen season and reset
+ * it to whichever one the fallback query picked, and the week summary then refused every week
+ * belonging to the other league.
+ *
+ * Access grants no management rights. Every commissioner page calls kf_can_manage_season() for
+ * itself; this is only about which league the viewer is currently looking at.
+ *
+ * @param  int      $season_id
+ * @param  int|null $user_id   Defaults to current user.
+ * @return bool
+ */
+function kf_can_access_season( $season_id, $user_id = null ) {
+    if ( ! $user_id ) {
+        $user_id = get_current_user_id();
+    }
+    if ( ! $season_id || ! $user_id ) {
+        return false;
+    }
+    if ( kf_can_manage_season( $season_id, $user_id ) ) {
+        return true;
+    }
+
+    global $wpdb;
+
+    // Any accepted member of the league, co-commissioner flag or not.
+    return (bool) $wpdb->get_var( $wpdb->prepare(
+        "SELECT COUNT(*) FROM {$wpdb->prefix}season_players
+         WHERE season_id = %d AND user_id = %d AND status = 'accepted'",
+        $season_id, $user_id
+    ) );
+}
+
+/**
  * Returns true if the user has commissioner access to at least one season.
  * Used to gate access to pages that require commissioner role but have no
  * specific season context yet (e.g. the Commissioner Dashboard listing page).
@@ -94,7 +133,10 @@ function kf_manage_active_season_session() {
     // or a session fixation scenario where the session contains an arbitrary ID.
     if (isset($_SESSION['kf_active_season_id'])) {
         $session_season_id = (int) $_SESSION['kf_active_season_id'];
-        $still_valid = kf_can_manage_season( $session_season_id, $user_id );
+        // Access, not management: this is "may you look at this league", and it runs on every
+        // request. Checking the commissioner helper here wiped an ordinary player's chosen
+        // season on every page load.
+        $still_valid = kf_can_access_season( $session_season_id, $user_id );
         if ($still_valid) {
             return; // Valid — nothing to do.
         }
@@ -134,8 +176,9 @@ function kf_ajax_set_active_season() {
 
     if ($season_id > 0) {
 
-        // Use central helper — user must be creator or accepted participant.
-        if ( kf_can_manage_season( $season_id, get_current_user_id() ) ) {
+        // Creator, co-commissioner or plain accepted participant — anyone who belongs to the
+        // league may switch to it. Commissioner pages gate themselves separately.
+        if ( kf_can_access_season( $season_id, get_current_user_id() ) ) {
             $_SESSION['kf_active_season_id'] = $season_id;
             delete_transient('kf_default_season_' . get_current_user_id());
             

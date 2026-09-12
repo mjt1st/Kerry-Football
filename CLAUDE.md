@@ -6,7 +6,7 @@ A WordPress plugin for running a **private fantasy-football pick'em league**. Pl
 
 - **Repo root:** `Kerry Football\Code\kerry-football-admin` (this folder is the plugin directory and the git root)
 - **Remote:** `github.com/mjt1st/Kerry-Football`, branch `main`
-- **Version:** `1.8.12` (plugin header in `kerry-football-admin.php`)
+- **Version:** `1.8.13` (plugin header in `kerry-football-admin.php`)
 - **DB schema version:** `1.3` (WP option `kf_db_version`)
 - **Author line:** `Kerry/Gemini` — much of the codebase was written by Gemini; comments carry version tags like `V2.1.6`, `SPORTS API V1`, `LATE PICKS V2.1` that do **not** match the plugin version. Treat them as change markers, not versions.
 
@@ -43,14 +43,17 @@ Classic procedural WordPress plugin. **No classes, no namespaces, no autoloader,
 
 **Active season lives in `$_SESSION['kf_active_season_id']`**, not in the URL. `kf_start_session_early()` starts the session on `init` priority 1 — every `session_start()` in this codebase is guarded by `session_status()` and `!headers_sent()` because unguarded calls previously caused "headers already sent" login crashes. Keep that guard on any new call. `includes/kf-season-switcher.php` owns the session, validates it against the user's memberships each request, and exposes the AJAX season switcher wired into the nav menu by `includes/kf-menus.php`.
 
-**Nav integration is filter-based:** menu items get CSS classes in wp-admin (`kf-season-switcher-placeholder`, `kf-commissioner-only`, `kf-player-only`) and `kf-menus.php` rewrites or hides them via `wp_nav_menu_objects`.
+**Nav integration is filter-based:** menu items get CSS classes in wp-admin (`kf-season-switcher-placeholder`, `kf-week-summary-placeholder`, `kf-commissioner-only`, `kf-player-only`) and `kf-menus.php` rewrites or hides them via `wp_nav_menu_objects`. `kf-week-summary-placeholder` is retitled and pointed at the active season's newest non-draft week (`/week-summary/?week_id=N`) on every request, because that id changes weekly; the item is dropped when the season has no visible week. The homepage season cards carry the same link (`summary_week` in `kf_get_card_data_for_season()`), which is the only route to a week summary that does not require knowing the id.
 
 ## Permissions
 
-Two helpers in `includes/kf-season-switcher.php` are the only correct way to check access:
+Three helpers in `includes/kf-season-switcher.php` are the only correct way to check access:
 
+- `kf_can_access_season( $season_id, $user_id = null )` — **may this user look at this league at all**: admin, creator, or any accepted member. Use for the active-season session, season switching, and read-only views keyed to a season. It grants no management rights.
 - `kf_can_manage_season( $season_id, $user_id = null )` — commissioner rights for **one** season.
 - `kf_is_any_commissioner( $user_id = null )` — commissioner of **at least one** season; use to gate pages with no season context yet.
+
+⚠️ Until 1.8.13 the manage check also guarded season switching and the session's active season. Ordinary players are accepted members with `is_commissioner = 0`, so they failed it: their chosen season was cleared on every request and reset by the fallback query, the switcher AJAX answered "You are not a participant in this season", and the week summary refused every week outside that one season. A player in two leagues could only ever see one. Use the access helper for anything that is about *which league is being viewed*.
 
 A user qualifies if they have `manage_options`, created the season (`seasons.created_by`), or are an accepted member flagged `season_players.is_commissioner = 1` (the co-commissioner role). Note the docblock on `kf_can_manage_season` still says site admins are *not* auto-granted — that is stale; the code grants them and commit `6db1bcc` made that deliberate.
 

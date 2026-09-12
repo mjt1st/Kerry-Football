@@ -137,6 +137,62 @@ function kf_add_login_logout_link( $items, $args ) {
 }
 add_filter( 'wp_nav_menu_items', 'kf_add_login_logout_link', 20, 2 );
 
+/**
+ * Points a placeholder menu item at the active season's current week summary.
+ *
+ * Add a menu item in Appearance > Menus with the CSS class kf-week-summary-placeholder (a
+ * custom link, URL "#"). Its title and link are rewritten per request, because the week id
+ * lives in the URL and changes every week — there is no static URL to bookmark.
+ *
+ * Same shape as the season switcher above: a placeholder the site owner positions, filled in
+ * here. The item is removed when the active season has no week players can see yet.
+ */
+function kf_render_week_summary_in_menu( $items, $args ) {
+    if ( ! isset( $args->theme_location ) || $args->theme_location !== 'primary' ) {
+        return $items;
+    }
+
+    $placeholder_class = 'kf-week-summary-placeholder';
+    $item_key = -1;
+    foreach ( $items as $key => $menu_item ) {
+        if ( ! empty( $menu_item->classes ) && in_array( $placeholder_class, $menu_item->classes, true ) ) {
+            $item_key = $key;
+            break;
+        }
+    }
+    if ( $item_key === -1 ) { return $items; }
+
+    if ( ! is_user_logged_in() ) {
+        unset( $items[ $item_key ] );
+        return array_values( $items );
+    }
+    if ( session_status() === PHP_SESSION_NONE && ! headers_sent() ) { session_start(); }
+
+    $season_id = (int) ( $_SESSION['kf_active_season_id'] ?? 0 );
+    $week      = null;
+    if ( $season_id > 0 ) {
+        global $wpdb;
+        $week = $wpdb->get_row( $wpdb->prepare(
+            "SELECT id, week_number FROM {$wpdb->prefix}weeks
+             WHERE season_id = %d AND status <> 'draft'
+             ORDER BY week_number DESC LIMIT 1",
+            $season_id
+        ) );
+    }
+
+    // Nothing to show yet: drop the item rather than leave a link to nowhere.
+    if ( ! $week ) {
+        unset( $items[ $item_key ] );
+        return array_values( $items );
+    }
+
+    $items[ $item_key ]->title = 'Week ' . (int) $week->week_number . ' Summary';
+    $items[ $item_key ]->url   = site_url( '/week-summary/?week_id=' . (int) $week->id );
+
+    return $items;
+}
+add_filter( 'wp_nav_menu_objects', 'kf_render_week_summary_in_menu', 20, 2 );
+
 function kf_filter_menu_items_by_role( $items, $args ) {
     if ( is_admin() ) { return $items; }
     $is_commissioner = kf_is_any_commissioner();
