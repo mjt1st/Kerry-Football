@@ -26,31 +26,47 @@ function kf_week_setup_form() {
     if (session_status() === PHP_SESSION_NONE) { session_start(); }
 
     global $wpdb;
-    $season_id = $_SESSION['kf_active_season_id'] ?? 0;
-    if (!$season_id) { return '<div class="kf-container"><h1>Week Setup</h1><p>No season selected.</p></div>'; }
-    if (!kf_can_manage_season($season_id)) { return '<p>You do not have access to this page.</p>'; }
 
     // Define table names
     $weeks_table = $wpdb->prefix . 'weeks';
     $matchups_table = $wpdb->prefix . 'matchups';
 
-    // Fetch the active season settings, which are crucial for defaults and validation
+    // Which league is this page about?
+    //
+    // With a week id in the URL the WEEK decides. The week is fetched by id alone, so its league
+    // has to be authorised before anything is shown or saved: gating on the session's league
+    // instead both refused a commissioner who arrived from another league, and — because the
+    // save writes season_id from that same variable — let an edit re-home someone else's week
+    // into the editor's league.
+    $week_id   = isset($_GET['week_id']) ? intval($_GET['week_id']) : 0;
+    $edit_mode = $week_id > 0;
+    $week      = null;
+
+    if ($edit_mode) {
+        $week = $wpdb->get_row($wpdb->prepare("SELECT * FROM $weeks_table WHERE id = %d", $week_id));
+        if (!$week) { return '<div class="kf-container"><h1>Week Setup</h1><p>Week not found.</p></div>'; }
+        if (!kf_enter_season_context((int) $week->season_id, true)) {
+            return '<p>You do not have access to this week.</p>';
+        }
+        $season_id = (int) $week->season_id;
+    } else {
+        $season_id = $_SESSION['kf_active_season_id'] ?? 0;
+        if (!$season_id) { return '<div class="kf-container"><h1>Week Setup</h1><p>No season selected.</p></div>'; }
+        if (!kf_can_manage_season($season_id)) { return '<p>You do not have access to this page.</p>'; }
+    }
+
+    // Fetch the season settings, which are crucial for defaults and validation
     $season = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}seasons WHERE id = %d", $season_id));
     if (!$season) { return '<p>Invalid season selected.</p>'; }
 
-    // Determine if we are editing an existing week or creating a new one
-    $week_id = isset($_GET['week_id']) ? intval($_GET['week_id']) : 0;
-    $edit_mode = $week_id > 0;
-    $week = null;
     $is_matchup_editable = true; // Can the matchups themselves be changed?
     $is_repair_mode = false;     // Is this a special case to fix a broken week?
 
     if ($edit_mode) {
-        $week = $wpdb->get_row($wpdb->prepare("SELECT * FROM $weeks_table WHERE id = %d", $week_id));
-        if ($week && $week->status !== 'draft') {
+        if ($week->status !== 'draft') {
             $is_matchup_editable = false;
         }
-        if ($week && (!$is_matchup_editable && (!isset($week->matchup_count) || !$week->matchup_count))) {
+        if (!$is_matchup_editable && (!isset($week->matchup_count) || !$week->matchup_count)) {
             $is_repair_mode = true;
         }
     }

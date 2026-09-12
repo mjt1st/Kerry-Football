@@ -6,7 +6,7 @@ A WordPress plugin for running a **private fantasy-football pick'em league**. Pl
 
 - **Repo root:** `Kerry Football\Code\kerry-football-admin` (this folder is the plugin directory and the git root)
 - **Remote:** `github.com/mjt1st/Kerry-Football`, branch `main`
-- **Version:** `1.8.13` (plugin header in `kerry-football-admin.php`)
+- **Version:** `1.8.14` (plugin header in `kerry-football-admin.php`)
 - **DB schema version:** `1.3` (WP option `kf_db_version`)
 - **Author line:** `Kerry/Gemini` — much of the codebase was written by Gemini; comments carry version tags like `V2.1.6`, `SPORTS API V1`, `LATE PICKS V2.1` that do **not** match the plugin version. Treat them as change markers, not versions.
 
@@ -52,6 +52,8 @@ Three helpers in `includes/kf-season-switcher.php` are the only correct way to c
 - `kf_can_access_season( $season_id, $user_id = null )` — **may this user look at this league at all**: admin, creator, or any accepted member. Use for the active-season session, season switching, and read-only views keyed to a season. It grants no management rights.
 - `kf_can_manage_season( $season_id, $user_id = null )` — commissioner rights for **one** season.
 - `kf_is_any_commissioner( $user_id = null )` — commissioner of **at least one** season; use to gate pages with no season context yet.
+
+⚠️ **A page keyed to a record must take its league from the record, never from the session.** `kf_enter_season_context( $season_id, $require_manage )` checks entitlement to that league and then makes it active; `kf_shares_managed_season( $player_id )` covers pages with no league in the URL (player stats). Before 1.8.14, Week Setup fetched a week by id alone and checked the SESSION league, so a commissioner of one league could edit another league's week — and saving wrote the session's `season_id` onto the row, moving the week between leagues; Manage Weeks published/unpublished any week id (emailing that league's players); and the picks page and player stats granted commissioner powers to a commissioner of *any* league. The AJAX handlers were already correct — each derives the league from the record it acts on.
 
 ⚠️ Until 1.8.13 the manage check also guarded season switching and the session's active season. Ordinary players are accepted members with `is_commissioner = 0`, so they failed it: their chosen season was cleared on every request and reset by the fallback query, the switcher AJAX answered "You are not a participant in this season", and the week summary refused every week outside that one season. A player in two leagues could only ever see one. Use the access helper for anything that is about *which league is being viewed*.
 

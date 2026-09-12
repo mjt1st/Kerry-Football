@@ -88,6 +88,75 @@ function kf_can_access_season( $season_id, $user_id = null ) {
 }
 
 /**
+ * Does the current user commission at least one league the given player belongs to?
+ *
+ * Used where a commissioner may look at another member's data but the page has no league in
+ * the URL to scope it (player stats). "Commissioner somewhere" is not enough.
+ *
+ * @param  int      $player_id
+ * @param  int|null $user_id   Defaults to current user.
+ * @return bool
+ */
+function kf_shares_managed_season( $player_id, $user_id = null ) {
+    $player_id = (int) $player_id;
+    if ( $player_id <= 0 ) {
+        return false;
+    }
+    if ( ! $user_id ) {
+        $user_id = get_current_user_id();
+    }
+
+    global $wpdb;
+    $season_ids = $wpdb->get_col( $wpdb->prepare(
+        "SELECT season_id FROM {$wpdb->prefix}season_players WHERE user_id = %d AND status = 'accepted'",
+        $player_id
+    ) );
+    foreach ( (array) $season_ids as $season_id ) {
+        if ( kf_can_manage_season( (int) $season_id, $user_id ) ) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Makes $season_id the league this request is about, if the viewer is entitled to it.
+ *
+ * Pages keyed to a record (a week id in the URL) have two sources of truth: the record's own
+ * league and whichever league the session happens to hold. Trusting the session while acting on
+ * the record is how Week Setup came to edit — and on save, re-home — a week belonging to another
+ * league, and how Manage Weeks could publish one. Trusting the record without checking is worse.
+ * So: check entitlement to the RECORD's league, then follow it.
+ *
+ * @param  int  $season_id      League the record belongs to.
+ * @param  bool $require_manage true for commissioner-only pages, false for anything a member may view.
+ * @return bool Whether the viewer may proceed.
+ */
+function kf_enter_season_context( $season_id, $require_manage = false ) {
+    $season_id = (int) $season_id;
+    if ( $season_id <= 0 ) {
+        return false;
+    }
+
+    $allowed = $require_manage
+        ? kf_can_manage_season( $season_id )
+        : kf_can_access_season( $season_id );
+    if ( ! $allowed ) {
+        return false;
+    }
+
+    if ( session_status() === PHP_SESSION_NONE && ! headers_sent() ) {
+        session_start();
+    }
+    if ( (int) ( $_SESSION['kf_active_season_id'] ?? 0 ) !== $season_id ) {
+        $_SESSION['kf_active_season_id'] = $season_id;
+        delete_transient( 'kf_default_season_' . get_current_user_id() );
+    }
+
+    return true;
+}
+
+/**
  * Returns true if the user has commissioner access to at least one season.
  * Used to gate access to pages that require commissioner role but have no
  * specific season context yet (e.g. the Commissioner Dashboard listing page).

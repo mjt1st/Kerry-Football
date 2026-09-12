@@ -405,14 +405,14 @@ function kf_my_picks_shortcode() {
     global $wpdb;
 
     $current_user_id     = get_current_user_id();
-    $is_commissioner     = kf_is_any_commissioner();
     $target_user_id      = $current_user_id;
     $is_editing_as_other = false;
 
-    if ($is_commissioner && isset($_GET['view_as']) && is_numeric($_GET['view_as'])) {
-        $target_user_id      = (int)$_GET['view_as'];
-        $is_editing_as_other = true;
-    }
+    // Commissioner status is decided per league, further down, once the week tells us which
+    // league this is. kf_is_any_commissioner() was used here, so a commissioner of ANY league
+    // could pass ?view_as= and open — and edit — another league's player's picks.
+    $is_commissioner = false;
+    $requested_view_as = ( isset($_GET['view_as']) && is_numeric($_GET['view_as']) ) ? (int) $_GET['view_as'] : 0;
 
     // --- Week first (authoritative) ---
     $week_id = isset($_GET['week_id']) ? (int)$_GET['week_id'] : 0;
@@ -432,6 +432,16 @@ function kf_my_picks_shortcode() {
 
     // --- Derive season from week (prevents cross-season bleed) ---
     $season_id = (int)$current_week->season_id;
+
+    // Now the league is known: commission it, or do not. Viewing someone else's picks is a
+    // commissioner power in THIS league, never a side effect of commissioning another one.
+    $is_commissioner = kf_can_manage_season( $season_id );
+    if ( $is_commissioner && $requested_view_as > 0 ) {
+        $target_user_id      = $requested_view_as;
+        $is_editing_as_other = true;
+    }
+    // Keep the rest of the UI on the league this week belongs to.
+    kf_enter_season_context( $season_id );
     $active_season_for_dd = $wpdb->get_row($wpdb->prepare(
         "SELECT * FROM {$wpdb->prefix}seasons WHERE id = %d",
         $season_id

@@ -36,7 +36,15 @@ function kf_manage_weeks_view_shortcode() {
         $nonce = $_GET['_wpnonce'];
         $redirect_url = remove_query_arg(['action', 'week_id', '_wpnonce']);
         
-        $week_info = $wpdb->get_row($wpdb->prepare("SELECT submission_deadline FROM $weeks_table WHERE id = %d", $week_id));
+        // Scope the action to a league this user actually commissions. The nonce proves the
+        // request came from them, not that the week is theirs — and publishing also emails that
+        // league's players.
+        $week_info = $wpdb->get_row($wpdb->prepare(
+            "SELECT submission_deadline, season_id FROM $weeks_table WHERE id = %d", $week_id
+        ));
+        if ( ! $week_info || ! kf_can_manage_season( (int) $week_info->season_id ) ) {
+            return '<div class="kf-container"><p>You do not have access to that week.</p></div>';
+        }
 
         if ($action === 'publish' && wp_verify_nonce($nonce, 'kf_publish_week_' . $week_id)) {
             $wpdb->update($weeks_table, ['status' => 'published'], ['id' => $week_id]);

@@ -28,7 +28,9 @@ function kf_player_stats_shortcode() {
     $view_user    = $current_user;
     if ( $is_commissioner && ! empty( $_GET['player_id'] ) ) {
         $req = get_userdata( intval( $_GET['player_id'] ) );
-        if ( $req ) {
+        // Commissioner of SOME league is not commissioner of this player's league. Only open
+        // another player's stats when the viewer commissions a league that player belongs to.
+        if ( $req && kf_shares_managed_season( (int) $_GET['player_id'] ) ) {
             $view_user_id = (int) $_GET['player_id'];
             $view_user    = $req;
         }

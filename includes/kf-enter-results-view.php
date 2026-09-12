@@ -13,19 +13,31 @@ function kf_enter_results_shortcode() {
     global $wpdb;
     $season_id = isset($_SESSION['kf_active_season_id']) ? (int)$_SESSION['kf_active_season_id'] : 0;
     $week_id   = isset($_GET['week_id']) ? intval($_GET['week_id']) : 0;
-    if (!$season_id || !kf_can_manage_season($season_id)) {
-        return '<div class="kf-container"><p>You do not have access to this page.</p></div>';
-    }
-
-    if (!$week_id || !$season_id) {
+    if (!$week_id) {
+        // Nothing in the URL to go on, so the session's league is all there is.
+        if (!$season_id || !kf_can_manage_season($season_id)) {
+            return '<div class="kf-container"><p>You do not have access to this page.</p></div>';
+        }
         return '<div class="kf-container"><h1>Enter Results</h1><p>Could not determine the week or season. Please return to the Manage Weeks page.</p></div>';
     }
+    // With a week id, the WEEK decides the league and is authorised below. Gating on the
+    // session's league here refused a commissioner of two leagues who followed a link to the
+    // league they did not happen to have selected.
 
     $weeks_table     = $wpdb->prefix . 'weeks';
     $matchups_table  = $wpdb->prefix . 'matchups';
     $season_name     = $wpdb->get_var($wpdb->prepare("SELECT name FROM {$wpdb->prefix}seasons WHERE id = %d", $season_id));
 
-    $week = $wpdb->get_row($wpdb->prepare("SELECT * FROM $weeks_table WHERE id = %d AND season_id = %d", $week_id, $season_id));
+    // Load by id, then let the week decide the league — a commissioner of two leagues clicking
+    // a link for the other one used to be told the week "is not available for result entry".
+    $week = $wpdb->get_row($wpdb->prepare("SELECT * FROM $weeks_table WHERE id = %d", $week_id));
+    if ( $week && ! kf_enter_season_context( (int) $week->season_id, true ) ) {
+        return '<div class="kf-container"><p>You do not have access to this week.</p></div>';
+    }
+    if ( $week && (int) $week->season_id !== (int) $season_id ) {
+        $season_id   = (int) $week->season_id;
+        $season_name = $wpdb->get_var($wpdb->prepare("SELECT name FROM {$wpdb->prefix}seasons WHERE id = %d", $season_id));
+    }
 
     if (!$week || !in_array($week->status, ['published', 'tie_resolution_needed'], true)) {
         return '<div class="kf-container"><p>This week is not available for result entry. It must be published and not yet finalized.</p></div>';
