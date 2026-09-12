@@ -112,7 +112,12 @@ function kf_espn_remote_get( $url, $timeout = 15 ) {
 
             // Transport failure: the request never landed, so a different User-Agent
             // will not help. Return it rather than burning through the whole matrix.
+            //
+            // Logged, because this is the silent one: a timeout (the college scoreboard is
+            // ~1.5 MB) returned an empty result that every caller read as "no games found",
+            // so scores simply stopped updating with nothing anywhere to say why.
             if ( is_wp_error( $response ) ) {
+                error_log( 'Kerry Football: ESPN request failed on ' . $host . ' (' . $agent . '): ' . $response->get_error_message() );
                 return $response;
             }
 
@@ -214,7 +219,9 @@ function kf_espn_fetch_scoreboard( $sport = 'nfl', $params = [] ) {
         return $cached;
     }
 
-    $response = kf_espn_remote_get( $url, 15 );
+    // 25s, not 15: the full FBS scoreboard is ~1.5 MB and a shared host can take a while over
+    // a slow link. A timeout here looks exactly like "no games found" to every caller.
+    $response = kf_espn_remote_get( $url, 25 );
 
     if ( is_wp_error( $response ) ) {
         return $response;

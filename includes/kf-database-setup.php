@@ -130,9 +130,9 @@ function kf_install_db() {
         week_id INT NOT NULL,
         matchup_id INT NOT NULL,
         pick VARCHAR(100) NOT NULL,
-        point_value INT NOT NULL, -- RECONCILED: Kept as INT as it stores whole numbers (1-16), not tiebreaker differences.
+        point_value INT NOT NULL,
         is_bpow TINYINT(1) DEFAULT 0,
-        submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP, -- RECONCILED: Added this column back to track submission times.
+        submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
         KEY user_id (user_id),
         KEY week_id (week_id),
@@ -151,7 +151,7 @@ function kf_install_db() {
         subtotal INT NOT NULL,
         tiebreaker_diff INT NOT NULL,
         mwow_bonus_awarded INT DEFAULT 0,
-        is_bpow_score TINYINT(1) DEFAULT 0, -- RECONCILED: Renamed from is_bp_column_score for clarity and consistency.
+        is_bpow_score TINYINT(1) DEFAULT 0,
         PRIMARY KEY  (id),
         UNIQUE KEY unique_user_week_score (user_id, week_id)
     ) $charset_collate;";

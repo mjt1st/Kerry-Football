@@ -3,7 +3,7 @@
 /**
  * Plugin Name: Kerry Football Admin
  * Description: A plugin for managing a private fantasy football league.
- * Version: 1.8.10
+ * Version: 1.8.11
  * Author: Kerry/Gemini
  *
  * * STABILITY FIX (V2.1.6): Added aggressive session start on the 'init' hook to prevent 

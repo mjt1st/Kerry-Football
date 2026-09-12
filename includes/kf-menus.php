@@ -88,6 +88,18 @@ function kf_render_season_switcher_in_menu( $items, $args ) {
         $item->classes = ['kf-season-switcher-item', 'menu-item', 'menu-item-type-custom'];
         $item->attr_title = $season->id; // Store the ID for the filter function
         $item->db_id = 0;
+        // Walker_Nav_Menu reads these on every item it renders. Leaving them off logged a
+        // PHP warning per item per page load — thousands of "Undefined property:
+        // stdClass::$current" lines in the site error log, which buried real errors.
+        $item->current = false;
+        $item->current_item_ancestor = false;
+        $item->current_item_parent = false;
+        $item->target = '';
+        $item->xfn = '';
+        $item->description = '';
+        $item->post_parent = 0;
+        $item->object_id = 0;
+        $item->type_label = 'Custom Link';
         $submenu_items[] = $item;
     }
     

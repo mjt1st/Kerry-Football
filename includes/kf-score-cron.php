@@ -194,21 +194,30 @@ function kf_cron_check_scores() {
         return;
     }
 
-    // Which sport to ask ESPN about. The season knows this ('nfl' or 'college-football'),
-    // so use it rather than the global default: a college league whose site default is NFL
-    // spent every run querying the NFL scoreboard, missing everything, then doing one
-    // wasted per-game lookup each (all 404s) before finally trying college.
-    $season_ids = array_unique( wp_list_pluck( $pending_matchups, 'season_id' ) );
-    $season_sport = null;
-    if ( count( $season_ids ) === 1 ) {
-        $season_sport = $wpdb->get_var( $wpdb->prepare(
-            "SELECT sport_type FROM {$wpdb->prefix}seasons WHERE id = %d",
-            intval( reset( $season_ids ) )
+    // Which sport to ask ESPN about — per season, not one sport for the whole run.
+    //
+    // This used to take the season's sport only when every pending game belonged to ONE
+    // season, and fall back to the site-wide default otherwise. A site running an NFL season
+    // and a college season at the same time therefore looked up BOTH on whichever scoreboard
+    // the default named, and every game in the other sport came back "not found at ESPN" —
+    // for the whole season, with no error anywhere, because not-found is not a failure.
+    $season_sports = [];
+    $season_ids    = array_map( 'intval', array_unique( wp_list_pluck( $pending_matchups, 'season_id' ) ) );
+    if ( ! empty( $season_ids ) ) {
+        $placeholders = implode( ',', array_fill( 0, count( $season_ids ), '%d' ) );
+        $season_rows  = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, sport_type FROM {$wpdb->prefix}seasons WHERE id IN ({$placeholders})",
+            $season_ids
         ) );
+        foreach ( (array) $season_rows as $season_row ) {
+            $season_sports[ (int) $season_row->id ] = $season_row->sport_type;
+        }
     }
-    $default_sport = ( $season_sport === 'college-football' || $season_sport === 'nfl' )
-        ? $season_sport
-        : get_option( 'kf_default_sport', 'nfl' );
+    $ids_by_sport = kf_group_event_ids_by_sport(
+        $pending_matchups,
+        $season_sports,
+        get_option( 'kf_default_sport', 'nfl' )
+    );
 
     // Drop the cached scoreboard before fetching, exactly as the manual refresh does.
     // kf_espn_fetch_scoreboard() caches for 15 minutes and this job runs every 15 minutes,
@@ -217,20 +226,29 @@ function kf_cron_check_scores() {
     foreach ( $event_ids as $cached_event_id ) {
         delete_transient( 'kf_espn_evt_' . $cached_event_id );
     }
-    $alt_sport = ( $default_sport === 'nfl' ) ? 'college-football' : 'nfl';
-    foreach ( [ $default_sport, $alt_sport ] as $cached_sport ) {
+    foreach ( [ 'nfl', 'college-football' ] as $cached_sport ) {
         kf_espn_clear_scoreboard_cache( $cached_sport );
     }
 
-    $scores        = kf_espn_fetch_scores( $default_sport, $event_ids );
+    // One fetch per sport, each asking only for that sport's games.
+    $scores = [];
+    foreach ( $ids_by_sport as $sport_key => $sport_event_ids ) {
+        $scores += kf_espn_fetch_scores( $sport_key, $sport_event_ids );
+    }
 
-    // If some IDs weren't found and we have a secondary sport, try that too
-    $found_ids = array_keys( $scores );
-    $missing   = array_diff( $event_ids, $found_ids );
+    // Anything still unaccounted for gets tried in the other sport: a season whose sport_type
+    // is wrong still updates, it just costs one extra call.
+    $missing = array_values( array_diff( $event_ids, array_map( 'strval', array_keys( $scores ) ) ) );
     if ( ! empty( $missing ) ) {
-        $alt_sport  = $default_sport === 'nfl' ? 'college-football' : 'nfl';
-        $alt_scores = kf_espn_fetch_scores( $alt_sport, $missing );
-        $scores     = array_merge( $scores, $alt_scores );
+        foreach ( [ 'nfl', 'college-football' ] as $retry_sport ) {
+            if ( empty( $missing ) ) { break; }
+            if ( isset( $ids_by_sport[ $retry_sport ] ) && ! array_diff( $missing, $ids_by_sport[ $retry_sport ] ) ) {
+                continue; // already asked this sport for exactly these
+            }
+            $retry_scores = kf_espn_fetch_scores( $retry_sport, $missing );
+            $scores      += $retry_scores;
+            $missing      = array_values( array_diff( $missing, array_map( 'strval', array_keys( $retry_scores ) ) ) );
+        }
     }
 
     if ( empty( $scores ) ) {
@@ -316,11 +334,11 @@ function kf_cron_check_scores() {
     // eligible to update, from rows being written that simply had not changed.
     update_option( 'kf_cron_last_report', [
         'at'        => time(),
-        'sport'     => $default_sport,
+        'sport'     => implode( ' + ', array_keys( $ids_by_sport ) ),
         'pending'   => count( $pending_matchups ),
         'fetched'   => count( $scores ),
         'updated'   => $cron_updated,
-        'unmatched' => array_values( array_diff( $event_ids, array_keys( $scores ) ) ),
+        'unmatched' => array_values( array_diff( $event_ids, array_map( 'strval', array_keys( $scores ) ) ) ),
     ], false );
 
     // Record successful run time for health monitoring dashboard.
@@ -330,6 +348,44 @@ function kf_cron_check_scores() {
     delete_transient( 'kf_score_cron_running' );
 }
 add_action( 'kf_check_game_scores', 'kf_cron_check_scores' );
+
+/**
+ * Buckets matchups' ESPN event ids by the sport their season is played in.
+ *
+ * Pure on purpose: the sport choice is what broke score updates for a site running an NFL and
+ * a college season side by side, so it is kept testable without WordPress or a database.
+ *
+ * @param array  $matchups      Rows with ->espn_game_id and ->season_id.
+ * @param array  $season_sports season_id => 'nfl'|'college-football'.
+ * @param string $fallback      Sport to use when a season's own is missing or unrecognised.
+ * @return array sport => list of unique event ids.
+ */
+function kf_group_event_ids_by_sport( $matchups, $season_sports, $fallback = 'nfl' ) {
+    if ( $fallback !== 'nfl' && $fallback !== 'college-football' ) {
+        $fallback = 'nfl';
+    }
+
+    $by_sport = [];
+    foreach ( (array) $matchups as $matchup ) {
+        $event_id = isset( $matchup->espn_game_id ) ? trim( (string) $matchup->espn_game_id ) : '';
+        if ( $event_id === '' ) {
+            continue;
+        }
+        $season_id = isset( $matchup->season_id ) ? (int) $matchup->season_id : 0;
+        $sport     = $season_sports[ $season_id ] ?? '';
+        if ( $sport !== 'nfl' && $sport !== 'college-football' ) {
+            $sport = $fallback;
+        }
+        if ( ! isset( $by_sport[ $sport ] ) ) {
+            $by_sport[ $sport ] = [];
+        }
+        if ( ! in_array( $event_id, $by_sport[ $sport ], true ) ) {
+            $by_sport[ $sport ][] = $event_id;
+        }
+    }
+
+    return $by_sport;
+}
 
 /**
  * Manual score refresh for a specific week.
@@ -361,20 +417,40 @@ function kf_refresh_week_scores( $week_id ) {
         delete_transient( 'kf_espn_evt_' . $eid );
     }
 
-    $default_sport = get_option( 'kf_default_sport', 'nfl' );
+    // Ask about THIS week's sport, not the site default. With two active seasons of different
+    // sports the default sent college weeks to the NFL scoreboard, where none of their games
+    // exist, and the run reported "0 game(s) updated" with nothing wrong in the log.
+    $week_sport = $wpdb->get_var( $wpdb->prepare(
+        "SELECT s.sport_type FROM {$wpdb->prefix}weeks w
+         JOIN {$wpdb->prefix}seasons s ON s.id = w.season_id
+         WHERE w.id = %d",
+        $week_id
+    ) );
+    $default_sport = ( $week_sport === 'nfl' || $week_sport === 'college-football' )
+        ? $week_sport
+        : get_option( 'kf_default_sport', 'nfl' );
+    $alt = ( $default_sport === 'nfl' ) ? 'college-football' : 'nfl';
 
-    // Clear the scoreboard cache too
-    kf_espn_clear_scoreboard_cache( $default_sport );
+    // Both caches, because the retry below may ask the other sport.
+    foreach ( [ $default_sport, $alt ] as $cached_sport ) {
+        kf_espn_clear_scoreboard_cache( $cached_sport );
+    }
 
-    // Now fetch fresh scores
-    $scores = kf_espn_fetch_scores( $default_sport, $event_ids );
-
-    // Try alternate sport for missing
-    $found = array_keys( $scores );
-    $missing = array_diff( $event_ids, $found );
+    $scores  = kf_espn_fetch_scores( $default_sport, $event_ids );
+    $missing = array_values( array_diff( $event_ids, array_map( 'strval', array_keys( $scores ) ) ) );
     if ( ! empty( $missing ) ) {
-        $alt = $default_sport === 'nfl' ? 'college-football' : 'nfl';
-        $scores = array_merge( $scores, kf_espn_fetch_scores( $alt, $missing ) );
+        $scores += kf_espn_fetch_scores( $alt, $missing );
+    }
+
+    if ( empty( $scores ) ) {
+        // Distinguish "ESPN gave us nothing" from "nothing needed writing". A blocked or
+        // timed-out request returns an empty list, which read as "0 game(s) updated" and sent
+        // everyone looking in the wrong place.
+        return [
+            'updated' => 0,
+            'message' => 'ESPN returned none of the ' . count( $event_ids ) . ' linked game(s) for this week ('
+                . esc_html( $default_sport ) . '). The request may have timed out or been refused — the site error log has the detail.',
+        ];
     }
 
     $updated = 0;
@@ -432,7 +508,7 @@ function kf_refresh_week_scores( $week_id ) {
 
     return [
         'updated' => $updated,
-        'message' => "{$updated} game(s) updated.",
+        'message' => "{$updated} game(s) updated (" . count( $scores ) . ' of ' . count( $event_ids ) . ' linked game(s) found at ESPN).',
     ];
 }
 
