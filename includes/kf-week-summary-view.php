@@ -405,7 +405,10 @@ function kf_week_summary_view() {
                 <span class="kf-action-separator">|</span>
                 <button id="kf-print-button" class="kf-button">Print</button>
                 <button id="kf-export-csv" class="kf-button">Export to CSV</button>
+                <button id="kf-copy-csv" class="kf-button">Copy CSV</button>
+                <button id="kf-copy-excel" class="kf-button" title="Tab-separated, so pasting into Excel splits into columns">Copy for Excel</button>
             </div>
+            <div id="kf-summary-export-status" class="kf-export-status" role="status" aria-live="polite"></div>
             
             <?php if ($is_commissioner): ?>
                 <div class="kf-action-group kf-commissioner-controls">
@@ -1151,55 +1154,141 @@ function kf_week_summary_view() {
 
     <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // --- CSV Export Script ---
-        // (Full CSV logic defined here)
-        const exportButton = document.getElementById('kf-export-csv');
-        if(exportButton) {
-            exportButton.addEventListener('click', function() {
-                const table = document.getElementById('kf-summary-table');
-                let csv = [];
-                // Add header title rows
-                const titleRow = `"<?php echo esc_js($week->season_name); ?> - Week <?php echo esc_js($week->week_number); ?> Summary"`;
-                csv.push(titleRow);
+        /* --- Week summary export: download, copy, copy for Excel ---
+           The three buttons share one reader, which builds a GRID before it builds any text.
+           Reading cells positionally (as this did) got the shape wrong two ways: Game and
+           Winner span two header rows, so the Pick/Points row started two columns early, and
+           Hide points rewrites each player header's live colspan, so exporting with it ticked
+           short-changed the header by one column per player — the same drift that used to
+           show on screen. Spans come from data-kf-colspan, the value the markup shipped with,
+           and cell text from textContent, so the file is the same whichever view-control
+           checkboxes happen to be ticked. */
+        (function(){
+            var TITLE    = '<?php echo esc_js($week->season_name . " - Week " . $week->week_number . " Summary"); ?>';
+            var FILENAME = '<?php echo esc_js(sanitize_title($week->season_name . '-week-' . $week->week_number)); ?>.csv';
 
-                // Process table rows
-                for (let i = 0; i < table.rows.length; i++) {
-                    const row = [];
-                    const cells = table.rows[i].cells;
-                    for (let j = 0; j < cells.length; j++) {
-                        let cellText = cells[j].innerText.replace(/(\r\n|\n|\r)/gm, " ").replace(/"/g, '""').trim();
-                        
-                        // Handle multi-line header content for cleaner CSV output
-                        if (i === 0 && j > 1) {
-                            const headerContent = cells[j].querySelector('.kf-header-cell-content');
-                            if(headerContent) {
-                                let mainText = headerContent.querySelector('span').textContent.trim();
-                                let smallText = headerContent.querySelector('small') ? headerContent.querySelector('small').textContent.trim() : '';
-                                cellText = `${mainText} (${smallText})`;
+            function cellText(cell){
+                var head = cell.querySelector('.kf-header-cell-content');
+                if (head) {
+                    var nameEl  = head.querySelector('span');
+                    var smallEl = head.querySelector('small');
+                    var main    = (nameEl ? nameEl.textContent : head.textContent).replace(/\s+/g, ' ').trim();
+                    var sub     = smallEl ? smallEl.textContent.replace(/\s+/g, ' ').trim() : '';
+                    return sub ? main + ' (' + sub + ')' : main;
+                }
+                return cell.textContent.replace(/\s+/g, ' ').trim();
+            }
+
+            function readGrid(table){
+                var grid = [];
+                for (var r = 0; r < table.rows.length; r++) {
+                    if (!grid[r]) { grid[r] = []; }
+                    var cells = table.rows[r].cells;
+                    for (var i = 0; i < cells.length; i++) {
+                        var cell = cells[i];
+                        var c = 0;
+                        while (grid[r][c] !== undefined) { c++; }
+                        var across = parseInt(cell.getAttribute('data-kf-colspan') || cell.getAttribute('colspan') || '1', 10) || 1;
+                        var down   = parseInt(cell.getAttribute('rowspan') || '1', 10) || 1;
+                        var text   = cellText(cell);
+                        for (var dr = 0; dr < down; dr++) {
+                            if (!grid[r + dr]) { grid[r + dr] = []; }
+                            for (var dc = 0; dc < across; dc++) {
+                                grid[r + dr][c + dc] = (dr === 0 && dc === 0) ? text : '';
                             }
                         }
-                        
-                        // Handle colspan by inserting empty cells
-                        const colspan = cells[j].getAttribute('colspan') || 1;
-                        row.push(`"${cellText}"`);
-                        for (let k = 1; k < colspan; k++) {
-                            row.push('""');
-                        }
                     }
-                    csv.push(row.join(','));
                 }
+                var width = 0;
+                grid.forEach(function(row){ if (row.length > width) { width = row.length; } });
+                return grid.map(function(row){
+                    var out = [];
+                    for (var k = 0; k < width; k++) { out.push(row[k] === undefined ? '' : row[k]); }
+                    return out;
+                });
+            }
 
-                const csvContent = "data:text/csv;charset=utf-8," + csv.join('\n');
-                const encodedUri = encodeURI(csvContent);
-                const link = document.createElement("a");
-                link.setAttribute("href", encodedUri);
-                link.setAttribute("download", "<?php echo esc_js(sanitize_title($week->season_name . '-week-' . $week->week_number)); ?>.csv");
-                document.body.appendChild(link); 
-                link.click();
-                document.body.removeChild(link);
-            });
-        }
-        
+            // RFC 4180: quote only a field holding a comma, double quote or line break.
+            function csvField(v){
+                v = (v === null || v === undefined) ? '' : String(v);
+                return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+            }
+            // Excel's paste splits on tabs and never on commas, and strips the quotes from a
+            // field that STARTS with one. Same rule as the picks page's Copy for Excel.
+            function tsvField(v){
+                v = (v === null || v === undefined) ? '' : String(v);
+                return /^"|[\t\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+            }
+
+            function build(){
+                var table = document.getElementById('kf-summary-table');
+                if (!table) { return null; }
+                var grid = readGrid(table);
+                return {
+                    rows: grid.length,
+                    csv: [csvField(TITLE)].concat(grid.map(function(row){ return row.map(csvField).join(','); })).join('\n') + '\n',
+                    tsv: [tsvField(TITLE)].concat(grid.map(function(row){ return row.map(tsvField).join('\t'); })).join('\r\n') + '\r\n'
+                };
+            }
+
+            var statusEl = document.getElementById('kf-summary-export-status');
+            function say(kind, message){
+                if (!statusEl) { return; }
+                statusEl.className = 'kf-export-status kf-export-' + kind;
+                statusEl.textContent = message;
+            }
+
+            function download(text){
+                // A BOM, unlike the picks export. That file answers to an outside consumer that
+                // specified no BOM; this one is opened by a person double-clicking it, and
+                // without the BOM Excel reads it as the local codepage and garbles a name like
+                // San Jos\u00e9 State.
+                var url = URL.createObjectURL(new Blob(['\uFEFF' + text], { type: 'text/csv;charset=utf-8' }));
+                var a = document.createElement('a');
+                a.href = url; a.download = FILENAME; a.style.display = 'none';
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+            }
+
+            function copyText(text){
+                if (navigator.clipboard && window.isSecureContext) { return navigator.clipboard.writeText(text); }
+                return new Promise(function(resolve, reject){
+                    var ta = document.createElement('textarea');
+                    ta.value = text; ta.setAttribute('readonly', '');
+                    ta.style.position = 'fixed'; ta.style.left = '-9999px';
+                    document.body.appendChild(ta); ta.select();
+                    var ok = false;
+                    try { ok = document.execCommand('copy'); } catch(e){ ok = false; }
+                    document.body.removeChild(ta);
+                    if (ok) { resolve(); } else { reject(new Error('copy failed')); }
+                });
+            }
+
+            function run(action){
+                var res = build();
+                if (!res) { say('error', 'The summary table could not be read.'); return; }
+                if (action === 'download') {
+                    download(res.csv);
+                    say('ok', 'Downloaded ' + res.rows + ' rows as ' + FILENAME + '.');
+                    return;
+                }
+                var forExcel = (action === 'excel');
+                copyText(forExcel ? res.tsv : res.csv).then(function(){
+                    say('ok', forExcel
+                        ? 'Copied ' + res.rows + ' rows for Excel \u2014 click cell A1 and paste; the columns split automatically.'
+                        : 'Copied ' + res.rows + ' rows to the clipboard.');
+                }, function(){
+                    say('error', 'The browser would not allow copying \u2014 use Export to CSV instead.');
+                });
+            }
+
+            var dl = document.getElementById('kf-export-csv');
+            var cp = document.getElementById('kf-copy-csv');
+            var cx = document.getElementById('kf-copy-excel');
+            if (dl) { dl.addEventListener('click', function(){ run('download'); }); }
+            if (cp) { cp.addEventListener('click', function(){ run('copy'); }); }
+            if (cx) { cx.addEventListener('click', function(){ run('excel'); }); }
+        })();
         // --- Live Scoring Update ---
         <?php if (!$is_finalized): ?>
             <?php foreach($live_totals as $player_id => $totals): ?>
