@@ -23,7 +23,7 @@ function kf_player_management_shortcode() {
     if (session_status() === PHP_SESSION_NONE) { session_start(); }
     global $wpdb;
 
-    $season_id = isset($_SESSION['kf_active_season_id']) ? (int)$_SESSION['kf_active_season_id'] : 0;
+    $season_id = kf_page_season_id();
     if ( ! $season_id ) {
         return kf_notice_page(
             'No league selected',
@@ -82,14 +82,20 @@ function kf_player_management_shortcode() {
     }
     if ( isset( $_POST['kf_update_player_status'] ) && isset( $_POST['_wpnonce'] ) && wp_verify_nonce( $_POST['_wpnonce'], 'kf_update_status_nonce' ) ) {
         $player_entry_id = intval( $_POST['player_entry_id'] );
-        $new_status      = sanitize_text_field( $_POST['new_status'] );
-        $wpdb->update( $season_players_table, [ 'status' => $new_status ], [ 'id' => $player_entry_id ] );
-        echo '<div class="notice notice-success is-dismissible"><p>Player status updated.</p></div>';
+        $new_status      = sanitize_key( wp_unslash( $_POST['new_status'] ) );
+        // The row id comes from the form, so the WHERE also names this page's league: by id alone, a
+        // commissioner of one league could change a player's status in any other. And only the
+        // statuses the column holds.
+        if ( in_array( $new_status, [ 'invited', 'accepted', 'declined' ], true ) ) {
+            $wpdb->update( $season_players_table, [ 'status' => $new_status ], [ 'id' => $player_entry_id, 'season_id' => $season_id ] );
+            echo '<div class="notice notice-success is-dismissible"><p>Player status updated.</p></div>';
+        }
     }
     if ( isset( $_POST['kf_remove_player'] ) && isset( $_POST['_wpnonce'] ) && wp_verify_nonce( $_POST['_wpnonce'], 'kf_remove_player_nonce' ) ) {
         $player_entry_id = intval( $_POST['player_entry_id'] );
-        $user_id_to_remove = $wpdb->get_var($wpdb->prepare("SELECT user_id FROM $season_players_table WHERE id = %d", $player_entry_id));
-        $wpdb->delete( $season_players_table, [ 'id' => $player_entry_id ] );
+        // Scoped to this page's league, for the same reason as the status change above.
+        $user_id_to_remove = $wpdb->get_var($wpdb->prepare("SELECT user_id FROM $season_players_table WHERE id = %d AND season_id = %d", $player_entry_id, $season_id));
+        $wpdb->delete( $season_players_table, [ 'id' => $player_entry_id, 'season_id' => $season_id ] );
         if ($user_id_to_remove) {
             $wpdb->delete( $player_order_table, ['season_id' => $season_id, 'user_id' => $user_id_to_remove] );
         }

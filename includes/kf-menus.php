@@ -29,22 +29,22 @@ function kf_render_season_switcher_in_menu( $items, $args ) {
     
     global $wpdb;
     $user_id = get_current_user_id();
-    $is_commissioner = kf_is_any_commissioner();
 
-    // CORRECTED: The table name is just 'seasons', not '{$wpdb->prefix}seasons'. $wpdb->prefix is already 'edk_'.
-    // Only show active seasons in the switcher (archived seasons are excluded)
-    if ($is_commissioner) {
-        $seasons_table = $wpdb->prefix . 'seasons';
-        $seasons = $wpdb->get_results("SELECT id, name, is_active FROM $seasons_table WHERE is_active = 1 ORDER BY name ASC");
+    // Active leagues this viewer may open: every one for a site admin, otherwise those they are an
+    // accepted member of or created — the same rule as kf_can_access_season(). Commissioning ANY
+    // league used to list EVERY league on the site, and picking one they were not in failed with
+    // "You are not a participant in this season".
+    if ( current_user_can( 'manage_options' ) ) {
+        $seasons = $wpdb->get_results( "SELECT id, name, is_active FROM {$wpdb->prefix}seasons WHERE is_active = 1 ORDER BY name ASC" );
     } else {
-        $seasons_table = $wpdb->prefix . 'seasons';
-        $season_players_table = $wpdb->prefix . 'season_players';
-        $seasons = $wpdb->get_results($wpdb->prepare(
-            "SELECT s.id, s.name, s.is_active FROM $seasons_table s
-             JOIN $season_players_table sp ON s.id = sp.season_id
-             WHERE sp.user_id = %d AND sp.status = 'accepted' AND s.is_active = 1
-             ORDER BY s.name ASC", $user_id
-        ));
+        $seasons = $wpdb->get_results( $wpdb->prepare(
+            "SELECT DISTINCT s.id, s.name, s.is_active FROM {$wpdb->prefix}seasons s
+             LEFT JOIN {$wpdb->prefix}season_players sp
+                    ON s.id = sp.season_id AND sp.user_id = %d AND sp.status = 'accepted'
+             WHERE s.is_active = 1 AND ( sp.user_id IS NOT NULL OR s.created_by = %d )
+             ORDER BY s.name ASC",
+            $user_id, $user_id
+        ) );
     }
 
 
@@ -68,9 +68,9 @@ function kf_render_season_switcher_in_menu( $items, $args ) {
     $items[$parent_item_key]->url = '#';
     $items[$parent_item_key]->classes[] = 'menu-item-has-children kf-season-switcher'; // Simplified class name
     
-    // --- FIX #1 --- Store the active season ID on the parent menu item object itself.
-    // We will use this in the filter function below to add the data-season-id attribute.
-    $items[$parent_item_key]->attr_title = $active_season_id;
+    // The id rides on its own property. It used to be stored in attr_title, which the walker prints as
+    // the link's title attribute — a hover tooltip showing a bare number.
+    $items[$parent_item_key]->kf_season_id = (int) $active_season_id;
 
 
     $submenu_items = [];
@@ -79,14 +79,17 @@ function kf_render_season_switcher_in_menu( $items, $args ) {
         $item = new stdClass();
         $item->ID = $season->id + 10000;
         $item->title = $season->name;
-        $item->url = '#'; 
+        // A real link: opens in a new tab, works without JavaScript, and the league is applied from
+        // the URL before the page renders.
+        $item->url = kf_league_url( site_url( '/season-summary/' ), $season->id );
         $item->menu_item_parent = $parent_item_id;
         $item->menu_order = 500 + $season->id; 
         $item->type = 'custom';
         $item->object = 'custom';
         $item->object_id = '';
         $item->classes = ['kf-season-switcher-item', 'menu-item', 'menu-item-type-custom'];
-        $item->attr_title = $season->id; // Store the ID for the filter function
+        $item->attr_title = '';
+        $item->kf_season_id = (int) $season->id;
         $item->db_id = 0;
         // Walker_Nav_Menu reads these on every item it renders. Leaving them off logged a
         // PHP warning per item per page load — thousands of "Undefined property:
@@ -112,12 +115,9 @@ add_filter('wp_nav_menu_objects', 'kf_render_season_switcher_in_menu', 20, 2);
 
 function kf_add_season_switcher_data_attribute($atts, $item, $args) {
     // For the sub-items (the other seasons in the dropdown)
-    if (isset($item->classes) && in_array('kf-season-switcher-item', $item->classes)) {
-        $atts['data-season-id'] = $item->attr_title;
-    }
-    // --- FIX #2 --- For the main parent item (the currently active season)
-    if (isset($item->classes) && in_array('kf-season-switcher', $item->classes)) {
-        $atts['data-season-id'] = $item->attr_title;
+    if ( isset( $item->kf_season_id ) && is_array( $item->classes ?? null )
+         && ( in_array( 'kf-season-switcher-item', $item->classes, true ) || in_array( 'kf-season-switcher', $item->classes, true ) ) ) {
+        $atts['data-season-id'] = (int) $item->kf_season_id;
     }
     return $atts;
 }

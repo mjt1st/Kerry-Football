@@ -21,21 +21,23 @@ function kf_homepage_shortcode() {
     if ( is_user_logged_in() ) {
         $current_user    = wp_get_current_user();
         global $wpdb;
-        $is_commissioner = kf_is_any_commissioner();
 
-        // Get seasons (commissioner sees all; players see theirs).
-        if ( $is_commissioner ) {
+        // The leagues this viewer belongs to: every league for a site admin, otherwise those they
+        // are an accepted member of or created. Commissioning ANY league used to list EVERY league
+        // on the site here, each with the Admin View and its buttons, for leagues they had no part in.
+        if ( current_user_can( 'manage_options' ) ) {
             $seasons = $wpdb->get_results(
                 "SELECT id, name, is_active FROM {$wpdb->prefix}seasons ORDER BY is_active DESC, name ASC"
             );
         } else {
             $seasons = $wpdb->get_results( $wpdb->prepare(
-                "SELECT s.id, s.name, s.is_active
+                "SELECT DISTINCT s.id, s.name, s.is_active
                  FROM {$wpdb->prefix}seasons s
-                 JOIN {$wpdb->prefix}season_players sp ON s.id = sp.season_id
-                 WHERE sp.user_id = %d AND sp.status = 'accepted'
+                 LEFT JOIN {$wpdb->prefix}season_players sp
+                        ON s.id = sp.season_id AND sp.user_id = %d AND sp.status = 'accepted'
+                 WHERE sp.user_id IS NOT NULL OR s.created_by = %d
                  ORDER BY s.is_active DESC, s.name ASC",
-                $current_user->ID
+                $current_user->ID, $current_user->ID
             ) );
         }
         ?>
@@ -50,8 +52,10 @@ function kf_homepage_shortcode() {
                 if ( $seasons ) {
                     foreach ( $seasons as $season ) {
                         if ( $season->is_active ) {
-                            $card_data = kf_get_card_data_for_season( $season->id, $current_user->ID, $is_commissioner );
-                            echo kf_render_season_card( $season, $is_commissioner, $card_data );
+                            // Admin View per league: commissioning one league is not running this one.
+                            $runs_this_league = kf_can_manage_season( (int) $season->id );
+                            $card_data = kf_get_card_data_for_season( $season->id, $current_user->ID, $runs_this_league );
+                            echo kf_render_season_card( $season, $runs_this_league, $card_data );
                             $active_seasons_found = true;
                         }
                     }
@@ -233,10 +237,7 @@ function kf_render_archived_season_row( $season, $user_id ) {
                 </span>
             <?php endif; ?>
         </div>
-        <a href="#"
-           class="kf-button kf-button-secondary kf-season-select-and-go"
-           data-season-id="<?php echo esc_attr( $season->id ); ?>"
-           data-redirect-url="<?php echo esc_url( site_url( '/season-summary/' ) ); ?>">
+        <a href="<?php echo esc_url( kf_league_url( site_url( '/season-summary/' ), $season->id ) ); ?>" class="kf-button kf-button-secondary">
             View Season
         </a>
     </div>
@@ -332,10 +333,7 @@ if ( ! function_exists( 'kf_render_season_card' ) ) {
                         $btn_link = $picks_link;
                     }
                     ?>
-                    <a href="#"
-                       class="kf-button kf-button-primary kf-season-select-and-go"
-                       data-season-id="<?php echo esc_attr( $season->id ); ?>"
-                       data-redirect-url="<?php echo esc_url( $btn_link ); ?>">
+                    <a href="<?php echo esc_url( kf_league_url( $btn_link, $season->id ) ); ?>" class="kf-button kf-button-primary">
                         <?php echo esc_html( $btn_text ); ?>
                     </a>
                 <?php endif; ?>
@@ -369,22 +367,13 @@ if ( ! function_exists( 'kf_render_season_card' ) ) {
                         }
                     }
                     ?>
-                    <a href="#"
-                       class="kf-button kf-button-primary kf-season-select-and-go"
-                       data-season-id="<?php echo esc_attr( $season->id ); ?>"
-                       data-redirect-url="<?php echo esc_url( $admin_btn_link ); ?>">
+                    <a href="<?php echo esc_url( kf_league_url( $admin_btn_link, $season->id ) ); ?>" class="kf-button kf-button-primary">
                         <?php echo esc_html( $admin_btn_text ); ?>
                     </a>
 
                     <div class="kf-card-quick-links">
-                        <a href="#"
-                           class="kf-season-select-and-go"
-                           data-season-id="<?php echo esc_attr( $season->id ); ?>"
-                           data-redirect-url="<?php echo esc_url( site_url( '/manage-players/' ) ); ?>">Manage Players</a> |
-                        <a href="#"
-                           class="kf-season-select-and-go"
-                           data-season-id="<?php echo esc_attr( $season->id ); ?>"
-                           data-redirect-url="<?php echo esc_url( site_url( '/edit-season/' ) ); ?>">Edit Season</a>
+                        <a href="<?php echo esc_url( kf_league_url( site_url( '/manage-players/' ), $season->id ) ); ?>">Manage Players</a> |
+                        <a href="<?php echo esc_url( kf_league_url( site_url( '/edit-season/' ), $season->id ) ); ?>">Edit Season</a>
                     </div>
                 <?php endif; ?>
 
@@ -402,17 +391,11 @@ if ( ! function_exists( 'kf_render_season_card' ) ) {
                 if ( $summary_week || $show_season_link ) : ?>
                     <div class="kf-card-quick-links">
                         <?php if ( $show_season_link ) : ?>
-                            <a href="#"
-                               class="kf-season-select-and-go"
-                               data-season-id="<?php echo esc_attr( $season->id ); ?>"
-                               data-redirect-url="<?php echo esc_url( site_url( '/season-summary/' ) ); ?>">Season Summary</a>
+                            <a href="<?php echo esc_url( kf_league_url( site_url( '/season-summary/' ), $season->id ) ); ?>">Season Summary</a>
                         <?php endif; ?>
                         <?php if ( $show_season_link && $summary_week ) : ?> | <?php endif; ?>
                         <?php if ( $summary_week ) : ?>
-                            <a href="#"
-                               class="kf-season-select-and-go"
-                               data-season-id="<?php echo esc_attr( $season->id ); ?>"
-                               data-redirect-url="<?php echo esc_url( site_url( '/week-summary/?week_id=' . (int) $summary_week->id ) ); ?>">Week <?php echo esc_html( $summary_week->week_number ); ?> Summary</a>
+                            <a href="<?php echo esc_url( kf_league_url( site_url( '/week-summary/?week_id=' . (int) $summary_week->id ), $season->id ) ); ?>">Week <?php echo esc_html( $summary_week->week_number ); ?> Summary</a>
                         <?php endif; ?>
                     </div>
                 <?php endif; ?>

@@ -59,7 +59,7 @@ function kf_player_dashboard_view() {
 
     global $wpdb;
     $user_id = get_current_user_id();
-    $season_id = $_SESSION['kf_active_season_id'] ?? 0;
+    $season_id = kf_page_season_id();
 
     // --- Handle invitation response (Accept / Decline) ---
     if ( isset( $_POST['kf_invite_response'] ) && isset( $_POST['kf_invite_nonce'] ) &&
@@ -92,6 +92,12 @@ function kf_player_dashboard_view() {
          ORDER BY s.id DESC",
         $user_id
     ) );
+
+    // A league named in a link is not pre-validated like the remembered one. Not a member (including
+    // merely invited): treat it as no league, which shows their invitations or their leagues.
+    if ( $season_id && ! kf_can_access_season( $season_id ) ) {
+        $season_id = 0;
+    }
 
     if (!$season_id) {
         // A player whose only tie to the site is an unanswered invitation has no active season,
@@ -310,7 +316,7 @@ function kf_player_dashboard_view() {
 
         <div style="margin: 1.5em 0 0.5em; display:flex; gap:0.75em; flex-wrap:wrap;">
             <a href="<?php echo esc_url( site_url( '/player-stats/' ) ); ?>" class="kf-button kf-button-secondary">📊 My Career Stats</a>
-            <a href="<?php echo esc_url( site_url( '/season-summary/' ) ); ?>" class="kf-button kf-button-secondary">🏆 Season Summary</a>
+            <a href="<?php echo esc_url( kf_league_url( site_url( '/season-summary/' ), $season_id ) ); ?>" class="kf-button kf-button-secondary">🏆 Season Summary</a>
         </div>
 
         <h3>Season History</h3>

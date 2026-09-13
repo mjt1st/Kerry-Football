@@ -26,20 +26,32 @@ function kf_commissioner_dashboard_shortcode() {
         $season_id = intval($_GET['season_id']);
         $nonce = $_GET['_wpnonce'];
 
-        if ($action === 'toggle_status' && wp_verify_nonce($nonce, 'kf_toggle_status_' . $season_id)) {
+        // The nonce proves the request came from this user, not that the league is theirs to change.
+        if ($action === 'toggle_status' && wp_verify_nonce($nonce, 'kf_toggle_status_' . $season_id) && kf_can_manage_season($season_id)) {
             $current_status = $wpdb->get_var($wpdb->prepare("SELECT is_active FROM $seasons_table WHERE id = %d", $season_id));
             $new_status = $current_status ? 0 : 1;
             $wpdb->update($seasons_table, ['is_active' => $new_status], ['id' => $season_id]);
-            wp_safe_redirect(remove_query_arg(['action', 'season_id', '_wpnonce']));
-            exit;
+            return kf_redirect_after_action(remove_query_arg(['action', 'season_id', '_wpnonce']));
         }
     }
 
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_season']) && isset($_POST['kf_delete_season_nonce']) && wp_verify_nonce($_POST['kf_delete_season_nonce'], 'kf_delete_season_action')) {
-        $delete_season_id = intval($_POST['season_id']);
+    // Deleting a league destroys every week, pick and score in it. Until 1.8.21 this checked only a
+    // nonce shared by every league and "commissioner of something", so any co-commissioner could
+    // delete any league on the site by posting its id. Now: a nonce bound to that league, and only a
+    // site admin or the league's creator — the same people who may grant co-commissioner.
+    $delete_season_id = ( $_SERVER['REQUEST_METHOD'] === 'POST' && isset( $_POST['delete_season'], $_POST['season_id'] ) )
+        ? absint( $_POST['season_id'] ) : 0;
+    $delete_row = $delete_season_id
+        ? $wpdb->get_row( $wpdb->prepare( "SELECT id, created_by FROM $seasons_table WHERE id = %d", $delete_season_id ) )
+        : null;
+    if ( $delete_row
+         && isset( $_POST['kf_delete_season_nonce'] )
+         && wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['kf_delete_season_nonce'] ) ), 'kf_delete_season_' . $delete_season_id )
+         && ( current_user_can( 'manage_options' ) || (int) $delete_row->created_by === get_current_user_id() ) ) {
         if ($delete_season_id > 0) {
-            // Cascading delete: remove all related data in dependency order
-            $wpdb->delete($wpdb->prefix . 'score_history', ['user_id' => 0], ['%d']); // placeholder — delete via week_id subquery below
+            // Cascading delete: remove all related data in dependency order.
+            // (A "placeholder" delete of score_history rows with user_id 0 — across EVERY league —
+            // used to run here. The week-scoped delete below is the real one.)
             // Delete score_history entries for weeks in this season
             $wpdb->query($wpdb->prepare(
                 "DELETE sh FROM {$wpdb->prefix}score_history sh
@@ -221,23 +233,19 @@ function kf_commissioner_dashboard_shortcode() {
                                 <td class="kf-status-cell"><?php echo $s->is_active ? '<span class="kf-status-active">Active</span>' : '<span class="kf-status-archived">Archived</span>'; ?></td>
                                 <td>
                                     <div class="kf-actions-group">
-                                        <a href="#" class="kf-button kf-button-action kf-season-select-and-go" 
-                                           data-season-id="<?php echo esc_attr($s->id); ?>" 
-                                           data-redirect-url="<?php echo esc_url(site_url('/manage-weeks/')); ?>">Manage Weeks</a>
+                                        <a href="<?php echo esc_url( kf_league_url( site_url('/manage-weeks/'), $s->id ) ); ?>" class="kf-button kf-button-action">Manage Weeks</a>
                                         
                                         <?php if ($s->is_active): ?>
                                             <span class="kf-action-separator">|</span>
-                                            <a href="#" class="kf-button kf-button-action kf-season-select-and-go" 
-                                               data-season-id="<?php echo esc_attr($s->id); ?>" 
-                                               data-redirect-url="<?php echo esc_url(site_url('/review-late-submissions/')); ?>">Review Late Picks</a>
+                                            <a href="<?php echo esc_url( kf_league_url( site_url('/review-late-submissions/'), $s->id ) ); ?>" class="kf-button kf-button-action">Review Late Picks</a>
                                         <?php endif; ?>
                                         
                                         <span class="kf-action-separator">|</span>
-                                        <a href="#" class="kf-button kf-season-select-and-go" data-season-id="<?php echo esc_attr($s->id); ?>" data-redirect-url="<?php echo esc_url(site_url('/season-summary/')); ?>">Summary</a>
+                                        <a href="<?php echo esc_url( kf_league_url( site_url('/season-summary/'), $s->id ) ); ?>" class="kf-button">Summary</a>
                                         <span class="kf-action-separator">|</span>
-                                        <a href="#" class="kf-button kf-button-secondary kf-season-select-and-go" data-season-id="<?php echo esc_attr($s->id); ?>" data-redirect-url="<?php echo esc_url(site_url('/manage-players/')); ?>">Players</a>
+                                        <a href="<?php echo esc_url( kf_league_url( site_url('/manage-players/'), $s->id ) ); ?>" class="kf-button kf-button-secondary">Players</a>
                                         <span class="kf-action-separator">|</span>
-                                        <a href="#" class="kf-button kf-button-secondary kf-season-select-and-go" data-season-id="<?php echo esc_attr($s->id); ?>" data-redirect-url="<?php echo esc_url(site_url('/edit-season/')); ?>">Settings</a>
+                                        <a href="<?php echo esc_url( kf_league_url( site_url('/edit-season/'), $s->id ) ); ?>" class="kf-button kf-button-secondary">Settings</a>
                                         <span class="kf-action-separator">|</span>
                                         <?php
                                         $toggle_url = wp_nonce_url(add_query_arg(['action' => 'toggle_status', 'season_id' => $s->id]), 'kf_toggle_status_' . $s->id);
@@ -245,11 +253,13 @@ function kf_commissioner_dashboard_shortcode() {
                                         ?>
                                         <a href="<?php echo esc_url($toggle_url); ?>" class="kf-button kf-button-secondary"><?php echo $toggle_text; ?></a>
                                         <span class="kf-action-separator">|</span>
+                                        <?php if ( current_user_can( 'manage_options' ) || (int) $s->created_by === $current_user_id ) : ?>
                                         <form method="POST" onsubmit="return confirm('Are you sure you want to PERMANENTLY delete this season and all related data? This cannot be undone.');" style="display:inline;">
-                                            <?php wp_nonce_field('kf_delete_season_action', 'kf_delete_season_nonce'); ?>
+                                            <?php wp_nonce_field('kf_delete_season_' . (int) $s->id, 'kf_delete_season_nonce'); ?>
                                             <input type="hidden" name="season_id" value="<?php echo esc_attr($s->id); ?>">
                                             <button type="submit" name="delete_season" class="kf-button-as-link kf-danger-text">Delete</button>
                                         </form>
+                                        <?php endif; ?>
                                     </div>
                                 </td>
                             </tr>

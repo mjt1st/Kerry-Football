@@ -54,6 +54,10 @@ document.addEventListener('DOMContentLoaded', function() {
     document.body.addEventListener('click', function(e) {
         const switcherLink = e.target.closest('.kf-season-switcher a, .kf-season-switcher-item a');
         if (!switcherLink) { return; }
+        // A link that names its league in its own URL (?season_id=) just navigates — the server
+        // applies the league before the page renders. Only a bare "#" still needs the AJAX switch.
+        const switcherHref = switcherLink.getAttribute('href');
+        if (switcherHref && switcherHref !== '#') { return; }
         e.preventDefault();
         
         const seasonId = switcherLink.dataset.seasonId;
@@ -68,6 +72,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const hubButtons = document.querySelectorAll('.kf-season-select-and-go');
     hubButtons.forEach(function(button) {
         button.addEventListener('click', function(e) {
+            const buttonHref = this.getAttribute('href');
+            if (buttonHref && buttonHref !== '#') { return; }   // a real league link: just navigate
             e.preventDefault();
             const seasonId = this.dataset.seasonId;
             const redirectUrl = this.dataset.redirectUrl;

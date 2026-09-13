@@ -157,6 +157,75 @@ function kf_enter_season_context( $season_id, $require_manage = false ) {
 }
 
 /**
+ * A plugin URL that names its league: ?season_id=N.
+ *
+ * Every link the plugin prints to a league page carries the league it means. That is what lets two
+ * tabs show two leagues, a bookmark or a shared link open the right one, and a link work without
+ * JavaScript — before 1.8.21 these were href="#" buttons that switched the session over AJAX and then
+ * redirected, so every tab followed whichever league was switched to last.
+ *
+ * @param string $url       Absolute URL (site_url( '/season-summary/' ) …); may already have a query.
+ * @param int    $season_id League.
+ * @return string Unescaped URL — escape on output.
+ */
+function kf_league_url( $url, $season_id ) {
+    $season_id = (int) $season_id;
+    return $season_id > 0 ? add_query_arg( 'season_id', $season_id, $url ) : $url;
+}
+
+/**
+ * The league a league-scoped page is about.
+ *
+ * ?season_id= when the URL has one, otherwise the remembered league. When the URL names a league the
+ * viewer may not open, the requested id is still returned — the page's own permission check then
+ * refuses THAT league, instead of quietly showing whichever league the session held.
+ *
+ * @return int 0 when neither the URL nor the session names one.
+ */
+function kf_page_season_id() {
+    if ( isset( $_GET['season_id'] ) ) {
+        return absint( wp_unslash( $_GET['season_id'] ) );
+    }
+    if ( session_status() === PHP_SESSION_NONE && ! headers_sent() ) {
+        session_start();
+    }
+    return (int) ( $_SESSION['kf_active_season_id'] ?? 0 );
+}
+
+/**
+ * Apply the league a link names before anything renders.
+ *
+ * The header menu (the season switcher's label, the Week N Summary item) and the script loader both
+ * read the remembered league before the page's own shortcode runs. Resolving the link only inside the
+ * page left the menu describing the previous league. template_redirect runs after the query and
+ * before the theme outputs anything.
+ *
+ * A week link names its league through the week. Action links (anything carrying _wpnonce — archive,
+ * publish, unpublish) name the thing to act on, not the league to view, and are left alone.
+ * Entering a league here needs only membership; commissioner pages check management themselves.
+ */
+function kf_apply_league_from_link() {
+    if ( is_admin() || wp_doing_ajax() || ! is_user_logged_in() || isset( $_GET['_wpnonce'] ) ) {
+        return;
+    }
+    $season_id = isset( $_GET['season_id'] ) ? absint( wp_unslash( $_GET['season_id'] ) ) : 0;
+    if ( ! $season_id && isset( $_GET['week_id'] ) ) {
+        $week_id = absint( wp_unslash( $_GET['week_id'] ) );
+        if ( $week_id > 0 ) {
+            global $wpdb;
+            $season_id = (int) $wpdb->get_var( $wpdb->prepare(
+                "SELECT season_id FROM {$wpdb->prefix}weeks WHERE id = %d",
+                $week_id
+            ) );
+        }
+    }
+    if ( $season_id > 0 ) {
+        kf_enter_season_context( $season_id );
+    }
+}
+add_action( 'template_redirect', 'kf_apply_league_from_link', 1 );
+
+/**
  * Returns true if the user has commissioner access to at least one season.
  * Used to gate access to pages that require commissioner role but have no
  * specific season context yet (e.g. the Commissioner Dashboard listing page).
@@ -241,7 +310,11 @@ function kf_ajax_set_active_season() {
     $season_id = isset($_POST['season_id']) ? intval($_POST['season_id']) : 0;
     
     // NEW: Get the desired redirect URL from the POST data, with a fallback.
-    $redirect_url = isset($_POST['redirect_url']) ? esc_url_raw($_POST['redirect_url']) : site_url('/season-summary/');
+    // Only ever back to this site. The request is nonce-bound to the user, so this was not open to
+    // another site's forms, but the endpoint had no reason to hand back an arbitrary URL.
+    $redirect_url = isset($_POST['redirect_url'])
+        ? wp_validate_redirect( esc_url_raw( wp_unslash( $_POST['redirect_url'] ) ), site_url('/season-summary/') )
+        : site_url('/season-summary/');
 
     if ($season_id > 0) {
 

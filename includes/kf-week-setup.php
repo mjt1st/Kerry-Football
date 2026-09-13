@@ -62,7 +62,7 @@ function kf_week_setup_form() {
         }
         $season_id = (int) $week->season_id;
     } else {
-        $season_id = $_SESSION['kf_active_season_id'] ?? 0;
+        $season_id = kf_page_season_id();
         if (!$season_id) {
             return kf_notice_page(
                 'No league selected',
@@ -285,7 +285,7 @@ function kf_week_setup_form() {
                     }
                 }
 
-                $picks_page_url = site_url('/player-dashboard/');
+                $picks_page_url = esc_url( kf_league_url( site_url('/player-dashboard/'), $season_id ) );
                 $message = "<p>Heads up, players!</p><p>Week {$week_info->week_number} is now open for picks. The deadline to submit is <strong>{$deadline_formatted}</strong>.</p><p><a href='{$picks_page_url}'>Click here to make your picks!</a></p><p>Good luck!</p>";
                 // Use the proper notification function that respects per-player preferences
                 if (function_exists('kf_send_picks_ready_notification')) {
@@ -301,7 +301,7 @@ function kf_week_setup_form() {
             } else {
                 echo '<div class="notice notice-success is-dismissible"><p>Week data has been saved. You will be redirected shortly.</p></div>';
             }
-            echo "<script>setTimeout(function() { window.location.href = '" . esc_url_raw(site_url('/manage-weeks/')) . "'; }, 2000);</script>";
+            echo '<script>setTimeout(function() { window.location.href = ' . wp_json_encode( kf_league_url( site_url('/manage-weeks/'), $season_id ) ) . '; }, 2000);</script>';
         }
     }
 
@@ -344,7 +344,7 @@ function kf_week_setup_form() {
     <div class="kf-container">
         <h1><?php echo esc_html($page_title); ?></h1>
         <h2 style="margin-top:0;">For Season: <?php echo esc_html($season->name); ?></h2>
-        <a href="<?php echo esc_url(site_url('/manage-weeks/')); ?>">← Back to Manage Weeks</a>
+        <a href="<?php echo esc_url( kf_league_url( site_url('/manage-weeks/'), $season_id ) ); ?>">← Back to Manage Weeks</a>
         
         <?php if (!$is_matchup_editable && !$is_repair_mode) : ?>
             <div class="notice notice-warning" style="margin-top: 20px;"><p><strong>Editing Locked:</strong> This week is published or finalized. To prevent issues with player picks, matchup details cannot be changed. You can still modify the deadline and re-publish to send an updated notification.</p></div>

@@ -11,7 +11,7 @@ function kf_enter_results_shortcode() {
     if (session_status() === PHP_SESSION_NONE) { session_start(); }
 
     global $wpdb;
-    $season_id = isset($_SESSION['kf_active_season_id']) ? (int)$_SESSION['kf_active_season_id'] : 0;
+    $season_id = kf_page_season_id();
     $week_id   = isset($_GET['week_id']) ? intval($_GET['week_id']) : 0;
     if (!$week_id) {
         // Nothing in the URL to go on, so the session's league is all there is.
@@ -183,7 +183,7 @@ function kf_enter_results_shortcode() {
     <div class="kf-container">
         <h1>Enter Results</h1>
         <h2 style="margin-top:0;">Week <?php echo esc_html($week->week_number); ?> of <?php echo esc_html($season_name); ?></h2>
-        <a href="<?php echo esc_url(site_url('/manage-weeks/')); ?>">&larr; Back to Manage Weeks</a>
+        <a href="<?php echo esc_url( kf_league_url( site_url('/manage-weeks/'), $season_id ) ); ?>">&larr; Back to Manage Weeks</a>
 
         <?php
         // Warn commissioner if auto-score is turned off for an API week

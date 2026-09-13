@@ -15,7 +15,7 @@ function kf_manage_weeks_view_shortcode() {
 
     global $wpdb;
 
-    $season_id = $_SESSION['kf_active_season_id'] ?? 0;
+    $season_id = kf_page_season_id();
 
     if (!$season_id) {
         return kf_notice_page(
@@ -79,9 +79,9 @@ function kf_manage_weeks_view_shortcode() {
             if ($week_info && function_exists('kf_schedule_deadline_reminder')) {
                 kf_schedule_deadline_reminder($week_id, $week_info->submission_deadline);
             }
-            
-            wp_safe_redirect($redirect_url);
-            exit;
+
+            // Must leave this URL: a refresh here would publish again and re-email every player.
+            return kf_redirect_after_action($redirect_url);
         }
         
         if ($action === 'unpublish' && wp_verify_nonce($nonce, 'kf_unpublish_week_' . $week_id)) {
@@ -92,8 +92,7 @@ function kf_manage_weeks_view_shortcode() {
                 kf_unschedule_deadline_reminder($week_id);
             }
 
-            wp_safe_redirect($redirect_url);
-            exit;
+            return kf_redirect_after_action($redirect_url);
         }
     }
 
@@ -125,8 +124,8 @@ function kf_manage_weeks_view_shortcode() {
         <h2 class="kf-page-subtitle">For Season: <?php echo esc_html($season->name); ?></h2>
         
         <div class="kf-action-bar">
-            <a href="<?php echo esc_url(site_url('/season-summary/')); ?>" class="kf-button">View Season Summary</a>
-            <a href="<?php echo esc_url(site_url('/week-setup/')); ?>" class="kf-button kf-button-action">+ Add New Week</a>
+            <a href="<?php echo esc_url( kf_league_url( site_url('/season-summary/'), $season_id ) ); ?>" class="kf-button">View Season Summary</a>
+            <a href="<?php echo esc_url( kf_league_url( site_url('/week-setup/'), $season_id ) ); ?>" class="kf-button kf-button-action">+ Add New Week</a>
         </div>
 
         <div class="kf-table-wrapper">
@@ -145,7 +144,7 @@ function kf_manage_weeks_view_shortcode() {
                                 <div class="kf-empty-icon">🏈</div>
                                 <h3>No weeks yet</h3>
                                 <p>Get started by adding the first week of the season.</p>
-                                <a href="<?php echo esc_url(site_url('/week-setup/')); ?>" class="kf-button kf-button-action">+ Add First Week</a>
+                                <a href="<?php echo esc_url( kf_league_url( site_url('/week-setup/'), $season_id ) ); ?>" class="kf-button kf-button-action">+ Add First Week</a>
                             </div>
                         </td></tr>
                     <?php else: ?>

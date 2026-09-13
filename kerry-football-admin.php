@@ -3,7 +3,7 @@
 /**
  * Plugin Name: Kerry Football Admin
  * Description: A plugin for managing a private fantasy football league.
- * Version: 1.8.20
+ * Version: 1.8.21
  * Author: Kerry/Gemini
  *
  * * STABILITY FIX (V2.1.6): Added aggressive session start on the 'init' hook to prevent 
@@ -109,6 +109,13 @@ function kf_ajax_update_notification_setting() {
 
 
     if ($season_id <= 0 || empty($notification_type) || $user_id < 0) {
+        wp_send_json_error(['message' => 'Invalid data provided.']);
+        return;
+    }
+    // Only the notifications that exist, and only for a league this user can see. Anything else was
+    // written as a settings row nothing would ever read.
+    if ( ! in_array( $notification_type, [ 'week_finalized', 'picks_ready', 'picks_reminder' ], true )
+         || ! kf_can_access_season( $season_id ) ) {
         wp_send_json_error(['message' => 'Invalid data provided.']);
         return;
     }

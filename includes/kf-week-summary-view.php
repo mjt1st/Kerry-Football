@@ -329,7 +329,7 @@ function kf_week_summary_view() {
 
     <div class="kf-container">
        <div class="kf-breadcrumbs kf-no-print">
-            <a href="<?php echo esc_url(site_url('/season-summary/')); ?>">Season Summary</a> &raquo;
+            <a href="<?php echo esc_url( kf_league_url( site_url('/season-summary/'), $week->season_id ) ); ?>">Season Summary</a> &raquo;
             <span>Week <?php echo esc_html($week->week_number); ?> Summary</span>
         </div>
 

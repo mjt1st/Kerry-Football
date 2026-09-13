@@ -24,7 +24,7 @@ function kf_edit_season_form_shortcode() {
     global $wpdb;
 
     // Get the season ID from the session.
-    $season_id = isset($_SESSION['kf_active_season_id']) ? (int)$_SESSION['kf_active_season_id'] : 0;
+    $season_id = kf_page_season_id();
     if (!$season_id) {
         return kf_notice_page(
             'No league selected',

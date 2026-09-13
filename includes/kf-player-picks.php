@@ -837,12 +837,12 @@ function kf_my_picks_shortcode() {
     <div class="kf-container">
         <div class="kf-breadcrumbs">
             <a href="<?php echo esc_url(site_url('/')); ?>">Homepage</a> &raquo;
-            <a href="<?php echo esc_url(site_url('/player-dashboard/')); ?>">Player Dashboard</a> &raquo;
+            <a href="<?php echo esc_url( kf_league_url( site_url('/player-dashboard/'), $season_id ) ); ?>">Player Dashboard</a> &raquo;
             <span>Picks for Week <?php echo esc_html($current_week->week_number); ?></span>
         </div>
 
         <?php if ($is_editing_as_other):
-            $season_summary_url = add_query_arg(['view_as' => $target_user_id], site_url('/season-summary/')); ?>
+            $season_summary_url = add_query_arg(['view_as' => $target_user_id], kf_league_url( site_url('/season-summary/'), $season_id )); ?>
             <div class="kf-back-link" style="margin-bottom:1em;">
                 <a href="<?php echo esc_url($season_summary_url); ?>">← Back to <?php echo esc_html($player_info->display_name); ?>'s Season Summary</a>
             </div>

@@ -24,9 +24,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * @param string $label     Button text.
  * @param string $url       Where it goes.
- * @param int    $season_id Switch to this league first (0 = plain link). Uses the existing
- *                          kf-season-select-and-go behaviour, so the league is set before the
- *                          browser follows the URL.
+ * @param int    $season_id League the destination is about (0 = none). Added to the URL as
+ *                          ?season_id=, which the destination page applies.
  * @return array
  */
 function kf_notice_action( $label, $url, $season_id = 0 ) {
@@ -65,10 +64,8 @@ function kf_notice_page( $title, $message, $actions = [], $tone = 'info' ) {
             }
             $classes = 'kf-button' . ( $first ? ' kf-button-primary' : ' kf-button-secondary' );
             if ( ! empty( $action['season_id'] ) ) {
-                // Switch league first, then go — same handler as the homepage season cards.
-                $out .= '<a href="#" class="' . esc_attr( $classes ) . ' kf-season-select-and-go"'
-                     . ' data-season-id="' . esc_attr( (int) $action['season_id'] ) . '"'
-                     . ' data-redirect-url="' . esc_url( $action['url'] ) . '">'
+                // The link names the league; the server applies it before the page renders.
+                $out .= '<a href="' . esc_url( kf_league_url( $action['url'], $action['season_id'] ) ) . '" class="' . esc_attr( $classes ) . '">'
                      . esc_html( $action['label'] ) . '</a>';
             } else {
                 $out .= '<a href="' . esc_url( $action['url'] ) . '" class="' . esc_attr( $classes ) . '">'
@@ -82,6 +79,28 @@ function kf_notice_page( $title, $message, $actions = [], $tone = 'info' ) {
     $out .= '</div></div>';
 
     return $out;
+}
+
+/**
+ * Redirect after a GET action, even from inside a shortcode.
+ *
+ * Shortcodes run while the theme is already sending the page, so wp_safe_redirect() usually cannot
+ * send its header — it returns false and the old code's exit then cut the page off mid-render. The
+ * action's URL also stayed in the address bar, so a refresh repeated it: publishing a week again
+ * re-emails every player. When headers are gone, replace the address from the browser instead.
+ *
+ * @param string $url Destination on this site.
+ * @return string HTML to return from the shortcode (only reached when headers were already sent).
+ */
+function kf_redirect_after_action( $url ) {
+    $url = wp_validate_redirect( $url, site_url( '/' ) );
+    if ( ! headers_sent() ) {
+        wp_safe_redirect( $url );
+        exit;
+    }
+    // wp_json_encode escapes "/" so the value cannot close the script element.
+    return '<script>window.location.replace(' . wp_json_encode( $url ) . ');</script>'
+         . '<noscript><p><a href="' . esc_url( $url ) . '">Continue</a></p></noscript>';
 }
 
 /**

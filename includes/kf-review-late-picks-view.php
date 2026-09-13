@@ -16,12 +16,12 @@ function kf_review_late_picks_view() {
     // REMOVED UNSAFE SESSION START: if (session_status() === PHP_SESSION_NONE) { session_start(); }
 
     global $wpdb;
-    $season_id = isset($_SESSION['kf_active_season_id']) ? (int)$_SESSION['kf_active_season_id'] : 0;
+    $season_id = kf_page_season_id();
     if (!$season_id) {
         return kf_notice_page(
             'No league selected',
             'Choose which league you want to review late picks for.',
-            array_merge( [ kf_notice_action( 'Home', site_url( '/' ) ) ], kf_league_switch_actions( '/review-late-picks/' ) ),
+            array_merge( [ kf_notice_action( 'Home', site_url( '/' ) ) ], kf_league_switch_actions( '/review-late-submissions/' ) ),
             'info'
         );
     }
@@ -29,7 +29,7 @@ function kf_review_late_picks_view() {
         return kf_notice_page(
             'You do not run this league',
             'Reviewing late picks is for commissioners. If you run a different league, switch to it.',
-            array_merge( [ kf_notice_action( 'Home', site_url( '/' ) ), kf_notice_action( 'Season Summary', site_url( '/season-summary/' ) ) ], kf_league_switch_actions( '/review-late-picks/', (int) $season_id ) ),
+            array_merge( [ kf_notice_action( 'Home', site_url( '/' ) ), kf_notice_action( 'Season Summary', site_url( '/season-summary/' ) ) ], kf_league_switch_actions( '/review-late-submissions/', (int) $season_id ) ),
             'warn'
         );
     }
@@ -45,6 +45,17 @@ function kf_review_late_picks_view() {
 
         $submission = $wpdb->get_row($wpdb->prepare("SELECT * FROM $pending_picks_table WHERE id = %d", $pending_id));
 
+        // The submission is loaded by an id from the form and the nonce is shared by every league,
+        // so check it belongs to the league this page is reviewing — which was authorised above.
+        // Without this a commissioner of one league could approve another league's late picks, and
+        // approving deletes that player's existing picks for the week.
+        $submission_season = $submission
+            ? (int) $wpdb->get_var( $wpdb->prepare( "SELECT season_id FROM {$wpdb->prefix}weeks WHERE id = %d", $submission->week_id ) )
+            : 0;
+        if ( $submission && $submission_season !== (int) $season_id ) {
+            $submission = null;
+        }
+
         if ($submission && $submission->status === 'pending') {
             if ($action === 'approve') {
                 $decoded_data = json_decode($submission->picks_data, true);
@@ -52,6 +63,11 @@ function kf_review_late_picks_view() {
                 $points = $decoded_data['points'] ?? [];
 
                 if (!empty($picks)) {
+                    // Approving deletes this player's standard picks for the week and writes the late
+                    // set. Picks are the one part of a week that cannot be recomputed, so snapshot first,
+                    // as every other pick-changing path does.
+                    if ( function_exists( 'kf_snapshot_week' ) ) { kf_snapshot_week( (int) $submission->week_id, 'pre_late_picks' ); }
+
                     // Start a transaction to ensure data integrity
                     $wpdb->query('START TRANSACTION');
 

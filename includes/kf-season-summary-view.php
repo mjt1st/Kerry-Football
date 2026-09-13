@@ -12,7 +12,7 @@ function kf_season_summary_view() {
     if (session_status() === PHP_SESSION_NONE) { session_start(); }
     
     global $wpdb;
-    $season_id = $_SESSION['kf_active_season_id'] ?? 0;
+    $season_id = kf_page_season_id();
 
     if (!$season_id) {
         // The session only ever defaults to an ACTIVE league, so this is mostly a player whose
@@ -33,12 +33,22 @@ function kf_season_summary_view() {
         );
     }
     
+    // The remembered league is validated on every request; a league named in a link is not, so check.
+    if ( ! kf_can_access_season( $season_id ) ) {
+        return kf_notice_page(
+            'Not in this league',
+            'That link is for a league you are not a member of.',
+            array_merge( kf_league_switch_actions( '/season-summary/', $season_id, 6, true ), [ kf_notice_action( 'Home', site_url( '/' ) ) ] ),
+            'warn'
+        );
+    }
+
     $current_user_id = get_current_user_id();
     $is_commissioner = kf_can_manage_season($season_id);
 
     $season = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}seasons WHERE id = %d", $season_id));
     if (!$season) {
-        unset($_SESSION['kf_active_season_id']);
+        if ( ! isset( $_GET['season_id'] ) ) { unset($_SESSION['kf_active_season_id']); }
         return kf_notice_page(
             'League not found',
             'The league you had selected no longer exists.',
@@ -164,6 +174,8 @@ function kf_season_summary_view() {
         <div class="kf-action-bar">
             <div class="kf-action-group">
                 <form method="GET" class="kf-view-as-form">
+                    <?php // A GET form replaces the query string; carry the league with it. ?>
+                    <input type="hidden" name="season_id" value="<?php echo (int) $season_id; ?>">
                     <label for="view_as_select">View As Player:</label>
                     <select id="view_as_select" name="view_as" onchange="this.form.submit()">
                         <option value="">-- Show All Players --</option>
@@ -174,7 +186,7 @@ function kf_season_summary_view() {
                 </form>
             </div>
             <div class="kf-action-group">
-                <a href="<?php echo esc_url(site_url('/manage-weeks/')); ?>" class="kf-button kf-button-action">Manage All Weeks</a>
+                <a href="<?php echo esc_url( kf_league_url( site_url('/manage-weeks/'), $season_id ) ); ?>" class="kf-button kf-button-action">Manage All Weeks</a>
             </div>
         </div>
         <?php endif; ?>
