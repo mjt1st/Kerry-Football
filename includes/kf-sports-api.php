@@ -256,6 +256,27 @@ function kf_espn_fetch_scoreboard( $sport = 'nfl', $params = [] ) {
 }
 
 /**
+ * Does an ESPN odds `details` string describe a posted pick'em (a line of zero)?
+ *
+ * A pick'em has no favourite and no number, so it can never match the "ABBR -X.X" parser, and
+ * a miss leaves both spreads null: the week reads "No odds" and the picks export writes an
+ * empty spread, which means "no line posted" — not "a line of zero". This used to be an exact,
+ * case-sensitive comparison against the untrimmed string with two spellings, so "PK ", "Pick"
+ * or "PICK" all fell through. Accepts the bare word or a team abbreviation before it
+ * ("KC PK"), in any case, with surrounding space. "OFF" (line taken down) is not a pick'em.
+ *
+ * @param string $details ESPN competitions[0].odds[0].details.
+ * @return bool
+ */
+function kf_espn_is_pickem( $details ) {
+    $d = strtoupper( trim( (string) $details ) );
+    if ( $d === '' ) {
+        return false;
+    }
+    return (bool) preg_match( "/(?:^|\s)(?:PK|PICK|PICK\s*['\x{2019}]?\s*EM|PICK-EM|EVEN)$/u", $d );
+}
+
+/**
  * Normalizes a single ESPN event into a standard game array.
  *
  * @param array  $event  Raw ESPN event data.
@@ -317,7 +338,7 @@ function kf_normalize_espn_event( $event, $sport ) {
 
         // Parse "ABBR -X.X" → determine which team is the spread favourite
         // The number's sign belongs to the referenced team (negative = they give points = favourite)
-        if ( $spread_details === 'PK' || $spread_details === 'EVEN' ) {
+        if ( kf_espn_is_pickem( $spread_details ) ) {
             $spread_home = 0.0;
             $spread_away = 0.0;
         // ⚠️ Match the abbreviation as "everything before the trailing number", not as a
