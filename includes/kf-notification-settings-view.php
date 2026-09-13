@@ -18,7 +18,6 @@ function kf_notification_settings_view() {
 
     global $wpdb;
     $user_id         = get_current_user_id();
-    $is_commissioner = kf_is_any_commissioner();
 
     $notification_types = [
         'week_finalized' => 'Week Finalized — receive an email when a week\'s results are posted.',
@@ -26,21 +25,29 @@ function kf_notification_settings_view() {
         'picks_reminder' => 'Picks Reminder — receive a reminder 24 hours before the deadline if you haven\'t submitted picks yet.',
     ];
 
-    // Fetch all seasons this user is accepted in (players) or all active seasons (commissioner).
-    if ($is_commissioner) {
+    // Personal settings: the leagues this user can see (every league for a site admin; otherwise an
+    // accepted member or the creator). League defaults: only the leagues they run. Commissioning ANY
+    // league used to list EVERY league in both tabs — toggles the save handler refuses, so they failed
+    // with "Invalid data provided" / "Permission denied" for leagues this user has no part in.
+    if ( current_user_can( 'manage_options' ) ) {
         $seasons = $wpdb->get_results(
             "SELECT id, name, is_active FROM {$wpdb->prefix}seasons ORDER BY is_active DESC, id DESC"
         );
     } else {
         $seasons = $wpdb->get_results( $wpdb->prepare(
-            "SELECT s.id, s.name, s.is_active
+            "SELECT DISTINCT s.id, s.name, s.is_active
              FROM {$wpdb->prefix}seasons s
-             JOIN {$wpdb->prefix}season_players sp ON s.id = sp.season_id
-             WHERE sp.user_id = %d AND sp.status = 'accepted'
+             LEFT JOIN {$wpdb->prefix}season_players sp
+                    ON s.id = sp.season_id AND sp.user_id = %d AND sp.status = 'accepted'
+             WHERE sp.user_id IS NOT NULL OR s.created_by = %d
              ORDER BY s.is_active DESC, s.id DESC",
-            $user_id
+            $user_id, $user_id
         ) );
     }
+    $managed_seasons = array_values( array_filter( (array) $seasons, function ( $s ) {
+        return kf_can_manage_season( (int) $s->id );
+    } ) );
+    $is_commissioner = ! empty( $managed_seasons );
 
     ob_start();
     ?>
@@ -90,10 +97,10 @@ function kf_notification_settings_view() {
                 <h3>League Default Settings</h3>
                 <p class="kf-form-note">These are the defaults applied to all players in each season. Individual players can override these on their own settings page.</p>
 
-                <?php if (empty($seasons)) : ?>
+                <?php if (empty($managed_seasons)) : ?>
                     <div class="kf-card"><p>No seasons found.</p></div>
                 <?php else : ?>
-                    <?php foreach ($seasons as $season) : ?>
+                    <?php foreach ($managed_seasons as $season) : ?>
                         <div class="kf-card" style="margin-bottom:1.5em;">
                             <div style="display:flex;align-items:center;gap:10px;margin-bottom:1em;padding-bottom:0.75em;border-bottom:1px solid #e5e7eb;">
                                 <h3 style="margin:0;border:none;padding:0;"><?php echo esc_html($season->name); ?></h3>

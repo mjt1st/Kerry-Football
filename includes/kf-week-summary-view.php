@@ -1157,7 +1157,9 @@ function kf_week_summary_view() {
     </script>
     <?php endif; // end scenario simulator ?>
 
-    </div>
+    <?php // (An orphan </div> sat here from the scenario simulator commit: .kf-container is already
+          // closed above, so it closed one of the THEME's wrappers instead — everything the theme
+          // renders after the shortcode landed outside its own container.) ?>
 
     <script>
     document.addEventListener('DOMContentLoaded', function() {

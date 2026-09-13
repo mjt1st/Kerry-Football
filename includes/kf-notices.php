@@ -130,16 +130,14 @@ function kf_league_switch_actions( $target_path = '/season-summary/', $exclude_i
     $user_id    = get_current_user_id();
     $exclude_id = (int) $exclude_id;
 
-    // Active leagues first (by name), then ended ones newest first. The filter is a fixed string
-    // chosen here, never user input.
+    // The filter is a fixed string chosen here, never user input.
     $active_filter = $include_inactive ? '1 = 1' : 's.is_active = 1';
-    $order         = 's.is_active DESC, CASE WHEN s.is_active = 1 THEN s.name END ASC, s.id DESC';
 
     if ( current_user_can( 'manage_options' ) ) {
         $seasons = $wpdb->get_results(
             "SELECT s.id, s.name, s.is_active FROM {$wpdb->prefix}seasons s
              WHERE {$active_filter}
-             ORDER BY {$order}"
+             ORDER BY s.name ASC"
         );
     } else {
         $seasons = $wpdb->get_results( $wpdb->prepare(
@@ -147,10 +145,25 @@ function kf_league_switch_actions( $target_path = '/season-summary/', $exclude_i
              LEFT JOIN {$wpdb->prefix}season_players sp
                     ON s.id = sp.season_id AND sp.user_id = %d AND sp.status = 'accepted'
              WHERE {$active_filter} AND ( sp.user_id IS NOT NULL OR s.created_by = %d )
-             ORDER BY {$order}",
+             ORDER BY s.name ASC",
             $user_id, $user_id
         ) );
     }
+
+    // Active leagues first by name, then ended ones newest first. Sorted here rather than with an
+    // ORDER BY CASE expression: ordering a DISTINCT result by an expression is SQL-mode dependent in
+    // MySQL, and a refused query would have quietly returned no switch buttons at all.
+    $seasons = (array) $seasons;
+    usort( $seasons, function ( $a, $b ) {
+        $a_active = ! isset( $a->is_active ) || (int) $a->is_active === 1;
+        $b_active = ! isset( $b->is_active ) || (int) $b->is_active === 1;
+        if ( $a_active !== $b_active ) {
+            return $a_active ? -1 : 1;
+        }
+        return $a_active
+            ? strcasecmp( (string) $a->name, (string) $b->name )
+            : ( (int) $b->id <=> (int) $a->id );
+    } );
 
     $actions = [];
     foreach ( (array) $seasons as $season ) {
