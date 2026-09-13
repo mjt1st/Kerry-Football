@@ -62,7 +62,9 @@ function kf_edit_season_form_shortcode() {
             
             $sport_type = in_array($_POST['sport_type'] ?? '', ['nfl', 'college-football']) ? $_POST['sport_type'] : 'nfl';
             $update_data = [
-                'name'              => sanitize_text_field($_POST['season_name']),
+                // wp_unslash: without it every save added another backslash before an apostrophe
+                // (Kerry's -> Kerry\'s -> Kerry\\\'s), because the form re-submits the stored name.
+                'name'              => sanitize_text_field( wp_unslash( $_POST['season_name'] ) ),
                 'mwow_bonus_points' => intval($_POST['mwow_bonus_points']),
                 'dd_max_uses'       => intval($_POST['dd_max_uses']),
                 'dd_enabled_week'   => intval($_POST['dd_enabled_week']),

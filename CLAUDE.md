@@ -6,7 +6,7 @@ A WordPress plugin for running a **private fantasy-football pick'em league**. Pl
 
 - **Repo root:** `Kerry Football\Code\kerry-football-admin` (this folder is the plugin directory and the git root)
 - **Remote:** `github.com/mjt1st/Kerry-Football`, branch `main`
-- **Version:** `1.8.22` (plugin header in `kerry-football-admin.php`)
+- **Version:** `1.8.23` (plugin header in `kerry-football-admin.php`)
 - **DB schema version:** `1.3` (WP option `kf_db_version`)
 - **Author line:** `Kerry/Gemini` — much of the codebase was written by Gemini; comments carry version tags like `V2.1.6`, `SPORTS API V1`, `LATE PICKS V2.1` that do **not** match the plugin version. Treat them as change markers, not versions.
 
@@ -97,6 +97,7 @@ Direct `$wpdb` calls everywhere. Always `$wpdb->prepare()` interpolated values; 
 ## Conventions
 
 - Everything is prefixed `kf_` — functions, options, AJAX actions, nonces, CSS classes.
+- ⚠️ **WordPress adds slashes to `$_GET`/`$_POST` before any plugin sees them.** Read text input as `sanitize_text_field( wp_unslash( $_POST['x'] ) )`; `sanitize_text_field()` alone keeps the backslash. League names are unslashed since 1.8.23 (create and edit — the edit form re-submitted the stored name, so each save added another backslash). ⚠️ **Team names and picks are not yet** (Week Setup `team_a[]`/`team_b[]`, the picks form): a team with an apostrophe is stored as `Hawai\x27i`, the score cron copies that into `result`, but the pick is re-slashed on submit (`Hawai\\x27i`), and scoring's `LOWER(TRIM(pick)) = LOWER(TRIM(result))` never matches — a correct pick scores as a loss. Fixing it needs existing rows normalised too, not just new saves.
 - Every file starts with `if ( ! defined( 'ABSPATH' ) ) exit;`.
 - `kf-enter-results-view.php` was written with **curly quotes** (`class=”x”`) throughout its markup, which browsers parse as part of the attribute value — the "Refresh Scores Now" button never fired because `type=”button”` is not a valid type and its `onclick` was not valid JS. Repaired in 1.5.4; watch for the same in any file that came from a word processor.
 - ⚠️ **Never write a literal `</script>` inside an inline `<script>` block** — not in a string, not in a comment. The HTML parser does not know JS syntax, so the first one it meets ends the block: everything after it renders as page text and every later script on the page dies with `Unexpected end of input`. A comment in `kf-week-summary-view.php` explaining `wp_json_encode`'s slash escaping did exactly that in 1.8.17 and took the whole week summary's inline script with it. Spell the tag out in words, or break it as `<\/script>`. Server-printed JSON is safe because `wp_json_encode` escapes the slash by default; `JSON_HEX_TAG` (as `kf-player-picks.php` uses) makes that explicit.

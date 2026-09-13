@@ -37,6 +37,8 @@ function kf_create_season_shortcode() {
     // Start output buffering to capture HTML.
     ob_start();
 
+    $new_season_id = 0; // Set when a league is created on this request.
+
     // --- Handle Form Submission ---
     // Check if the form was submitted and the submit button was clicked.
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['kf_season_submit'])) {
@@ -47,11 +49,13 @@ function kf_create_season_shortcode() {
             global $wpdb;
 
             // Sanitize and retrieve all data from the form POST request.
-            $name               = sanitize_text_field($_POST['season_name']);
+            // wp_unslash: WordPress adds slashes to $_POST, so without it "Kerry's League" was saved as
+            // "Kerry\'s League" and displayed that way everywhere.
+            $name               = sanitize_text_field( wp_unslash( $_POST['season_name'] ) );
             $num_weeks          = intval($_POST['num_weeks']);
             $weekly_points      = intval($_POST['weekly_point_total']);
             $matchup_count      = intval($_POST['default_matchup_count']);
-            $point_values       = sanitize_text_field($_POST['default_point_values']);
+            $point_values       = sanitize_text_field( wp_unslash( $_POST['default_point_values'] ) );
             $mwow_bonus         = intval($_POST['mwow_bonus']);
             $dd_max             = intval($_POST['dd_max']);
             $dd_week            = intval($_POST['dd_start_week']);
@@ -108,22 +112,36 @@ function kf_create_season_shortcode() {
                         'display_order' => 1 // As the first player, order is 1
                     ]);
 
-                    echo '<div class="notice notice-success"><p>✅ Season created successfully! You have been automatically added as a player.</p></div>';
+                    // Say where to go next. The page used to stop at the success line, and the only way
+                    // into the new league was back through the homepage. Each link names the league, so
+                    // it opens that league whichever one was selected before.
+                    $next_steps = [
+                        'Add the first week' => site_url( '/manage-weeks/' ),
+                        'Invite players'     => site_url( '/manage-players/' ),
+                        'League settings'    => site_url( '/edit-season/' ),
+                    ];
+                    echo '<div class="notice notice-success"><p>✅ <strong>' . esc_html( $name ) . '</strong> created. You have been added as a player.</p><p class="kf-next-steps">';
+                    foreach ( $next_steps as $label => $url ) {
+                        echo '<a class="kf-button" href="' . esc_url( kf_league_url( $url, $new_season_id ) ) . '">' . esc_html( $label ) . '</a> ';
+                    }
+                    echo '</p></div>';
                 }
             }
         }
     }
 
-    // Repopulate form values from POST on error, or use defaults for first load.
-    $v_name        = isset( $_POST['kf_season_submit'] ) ? esc_attr( $_POST['season_name'] ?? '' )             : '';
-    $v_sport       = isset( $_POST['kf_season_submit'] ) ? sanitize_text_field( $_POST['sport_type'] ?? 'nfl' ) : 'nfl';
-    $v_num_weeks   = isset( $_POST['kf_season_submit'] ) ? intval( $_POST['num_weeks'] ?? 0 )                  : '';
-    $v_wpt         = isset( $_POST['kf_season_submit'] ) ? intval( $_POST['weekly_point_total'] ?? 0 )         : '';
-    $v_matchups    = isset( $_POST['kf_season_submit'] ) ? intval( $_POST['default_matchup_count'] ?? 0 )      : '';
-    $v_points      = isset( $_POST['kf_season_submit'] ) ? esc_attr( $_POST['default_point_values'] ?? '' )    : '';
-    $v_mwow        = isset( $_POST['kf_season_submit'] ) ? intval( $_POST['mwow_bonus'] ?? 0 )                 : '';
-    $v_dd_max      = isset( $_POST['kf_season_submit'] ) ? intval( $_POST['dd_max'] ?? 4 )                     : 4;
-    $v_dd_week     = isset( $_POST['kf_season_submit'] ) ? intval( $_POST['dd_start_week'] ?? 9 )              : 9;
+    // Repopulate form values from POST on error, or use defaults for first load. After a successful
+    // create the form starts empty again: refilled with what was just submitted, it invited a second click.
+    $repopulate = isset( $_POST['kf_season_submit'] ) && ! $new_season_id;
+    $v_name        = $repopulate ? esc_attr( wp_unslash( $_POST['season_name'] ?? '' ) ) : '';
+    $v_sport       = $repopulate ? sanitize_text_field( $_POST['sport_type'] ?? 'nfl' ) : 'nfl';
+    $v_num_weeks   = $repopulate ? intval( $_POST['num_weeks'] ?? 0 )                  : '';
+    $v_wpt         = $repopulate ? intval( $_POST['weekly_point_total'] ?? 0 )         : '';
+    $v_matchups    = $repopulate ? intval( $_POST['default_matchup_count'] ?? 0 )      : '';
+    $v_points      = $repopulate ? esc_attr( wp_unslash( $_POST['default_point_values'] ?? '' ) ) : '';
+    $v_mwow        = $repopulate ? intval( $_POST['mwow_bonus'] ?? 0 )                 : '';
+    $v_dd_max      = $repopulate ? intval( $_POST['dd_max'] ?? 4 )                     : 4;
+    $v_dd_week     = $repopulate ? intval( $_POST['dd_start_week'] ?? 9 )              : 9;
     ?>
     <div class="kf-container">
         <h2>Season Setup</h2>
