@@ -389,18 +389,31 @@ if ( ! function_exists( 'kf_render_season_card' ) ) {
                 <?php endif; ?>
 
                 <?php
-                // Every card gets a direct route to the week summary. Reaching it used to mean
-                // knowing the week id and typing /week-summary/?week_id=N by hand. Rendered for
-                // players and commissioners alike, and outside both blocks so a commissioner who
-                // also plays gets one link rather than two.
-                if ( $summary_week ) : ?>
+                // Every card gets direct routes to both summaries, for players and commissioners
+                // alike, outside both blocks so a commissioner who also plays gets one set.
+                //
+                // Week summary: reaching it used to mean typing /week-summary/?week_id=N by hand.
+                // Season summary: the player button only reads "View Summary" before a week is
+                // published; after that it becomes Make Your Picks, and a player had no way from
+                // the homepage to one league's standings. Skipped only while that button is
+                // itself the season summary link, so the card never offers it twice.
+                $player_button_is_summary = $is_also_player && ! $is_published;
+                $show_season_link         = ! $player_button_is_summary;
+                if ( $summary_week || $show_season_link ) : ?>
                     <div class="kf-card-quick-links">
-                        <a href="#"
-                           class="kf-season-select-and-go"
-                           data-season-id="<?php echo esc_attr( $season->id ); ?>"
-                           data-redirect-url="<?php echo esc_url( site_url( '/week-summary/?week_id=' . (int) $summary_week->id ) ); ?>">
-                            Week <?php echo esc_html( $summary_week->week_number ); ?> Summary
-                        </a>
+                        <?php if ( $show_season_link ) : ?>
+                            <a href="#"
+                               class="kf-season-select-and-go"
+                               data-season-id="<?php echo esc_attr( $season->id ); ?>"
+                               data-redirect-url="<?php echo esc_url( site_url( '/season-summary/' ) ); ?>">Season Summary</a>
+                        <?php endif; ?>
+                        <?php if ( $show_season_link && $summary_week ) : ?> | <?php endif; ?>
+                        <?php if ( $summary_week ) : ?>
+                            <a href="#"
+                               class="kf-season-select-and-go"
+                               data-season-id="<?php echo esc_attr( $season->id ); ?>"
+                               data-redirect-url="<?php echo esc_url( site_url( '/week-summary/?week_id=' . (int) $summary_week->id ) ); ?>">Week <?php echo esc_html( $summary_week->week_number ); ?> Summary</a>
+                        <?php endif; ?>
                     </div>
                 <?php endif; ?>
             </div>

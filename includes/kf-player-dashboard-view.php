@@ -105,10 +105,15 @@ function kf_player_dashboard_view() {
                  . kf_render_invite_banners( $pending_invitations )
                  . '</div>';
         }
+        // "You are not in a league yet" was wrong for a player whose leagues have all ended: they
+        // have no active league to default to, but they are in leagues. Offer those.
+        $switches = kf_league_switch_actions( '/player-dashboard/', 0, 6, true );
         return kf_notice_page(
             'No league selected',
-            'You are not in a league yet. A commissioner has to invite you; the invitation will show up here.',
-            array_merge( [ kf_notice_action( 'Home', site_url( '/' ) ) ], kf_league_switch_actions( '/player-dashboard/' ) ),
+            $switches
+                ? 'Pick a league to open its dashboard.'
+                : 'You are not in a league yet. A commissioner has to invite you; the invitation will show up here.',
+            array_merge( $switches, [ kf_notice_action( 'Home', site_url( '/' ) ) ] ),
             'info'
         );
     }

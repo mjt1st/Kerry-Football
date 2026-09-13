@@ -91,12 +91,18 @@ function kf_notice_page( $title, $message, $actions = [], $tone = 'info' ) {
  * commissioner of one league and a player in another is normal here, so the way out is almost
  * always a switch rather than a login.
  *
- * @param string $target_path Where to land after switching.
- * @param int    $exclude_id  League to leave out (typically the active one).
- * @param int    $limit       Safety cap on how many buttons to render.
+ * Ended leagues are left out by default: a switch is usually a way back to something current.
+ * Pass $include_inactive where an ended league is a legitimate destination — the season summary
+ * and dashboard, for a player whose leagues have all finished. Those have no active league to
+ * default to, so without it they were offered nothing at all.
+ *
+ * @param string $target_path      Where to land after switching.
+ * @param int    $exclude_id       League to leave out (typically the active one).
+ * @param int    $limit            Safety cap on how many buttons to render.
+ * @param bool   $include_inactive Also offer ended leagues, after the active ones.
  * @return array kf_notice_action() entries.
  */
-function kf_league_switch_actions( $target_path = '/season-summary/', $exclude_id = 0, $limit = 4 ) {
+function kf_league_switch_actions( $target_path = '/season-summary/', $exclude_id = 0, $limit = 4, $include_inactive = false ) {
     if ( ! is_user_logged_in() ) {
         return [];
     }
@@ -105,17 +111,24 @@ function kf_league_switch_actions( $target_path = '/season-summary/', $exclude_i
     $user_id    = get_current_user_id();
     $exclude_id = (int) $exclude_id;
 
+    // Active leagues first (by name), then ended ones newest first. The filter is a fixed string
+    // chosen here, never user input.
+    $active_filter = $include_inactive ? '1 = 1' : 's.is_active = 1';
+    $order         = 's.is_active DESC, CASE WHEN s.is_active = 1 THEN s.name END ASC, s.id DESC';
+
     if ( current_user_can( 'manage_options' ) ) {
         $seasons = $wpdb->get_results(
-            "SELECT id, name FROM {$wpdb->prefix}seasons WHERE is_active = 1 ORDER BY name ASC"
+            "SELECT s.id, s.name, s.is_active FROM {$wpdb->prefix}seasons s
+             WHERE {$active_filter}
+             ORDER BY {$order}"
         );
     } else {
         $seasons = $wpdb->get_results( $wpdb->prepare(
-            "SELECT DISTINCT s.id, s.name FROM {$wpdb->prefix}seasons s
+            "SELECT DISTINCT s.id, s.name, s.is_active FROM {$wpdb->prefix}seasons s
              LEFT JOIN {$wpdb->prefix}season_players sp
                     ON s.id = sp.season_id AND sp.user_id = %d AND sp.status = 'accepted'
-             WHERE s.is_active = 1 AND ( sp.user_id IS NOT NULL OR s.created_by = %d )
-             ORDER BY s.name ASC",
+             WHERE {$active_filter} AND ( sp.user_id IS NOT NULL OR s.created_by = %d )
+             ORDER BY {$order}",
             $user_id, $user_id
         ) );
     }
@@ -128,8 +141,9 @@ function kf_league_switch_actions( $target_path = '/season-summary/', $exclude_i
         if ( count( $actions ) >= $limit ) {
             break;
         }
+        $ended     = isset( $season->is_active ) && ! (int) $season->is_active;
         $actions[] = kf_notice_action(
-            'Switch to ' . $season->name,
+            ( $ended ? 'View ' . $season->name . ' (ended)' : 'Switch to ' . $season->name ),
             site_url( $target_path ),
             (int) $season->id
         );

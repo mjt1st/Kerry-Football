@@ -14,7 +14,24 @@ function kf_season_summary_view() {
     global $wpdb;
     $season_id = $_SESSION['kf_active_season_id'] ?? 0;
 
-    if (!$season_id) return '<div class="kf-container"><h1>Season Summary</h1><p>Please select a season from the main menu to begin.</p></div>';
+    if (!$season_id) {
+        // The session only ever defaults to an ACTIVE league, so this is mostly a player whose
+        // leagues have all ended — and the menu switcher lists active leagues only, so "select
+        // a season from the main menu" pointed them at a menu with nothing in it. Offer their
+        // leagues directly, ended ones included.
+        $switches = kf_league_switch_actions( '/season-summary/', 0, 6, true );
+        return kf_notice_page(
+            'No league selected',
+            $switches
+                ? 'Pick a league to see its standings.'
+                : 'You are not in any league yet. A commissioner has to invite you; the invitation will show up on your Player Dashboard.',
+            array_merge( $switches, [
+                kf_notice_action( 'Player Dashboard', site_url( '/player-dashboard/' ) ),
+                kf_notice_action( 'Home', site_url( '/' ) ),
+            ] ),
+            'info'
+        );
+    }
     
     $current_user_id = get_current_user_id();
     $is_commissioner = kf_can_manage_season($season_id);

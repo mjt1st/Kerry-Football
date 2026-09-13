@@ -6,7 +6,7 @@ A WordPress plugin for running a **private fantasy-football pick'em league**. Pl
 
 - **Repo root:** `Kerry Football\Code\kerry-football-admin` (this folder is the plugin directory and the git root)
 - **Remote:** `github.com/mjt1st/Kerry-Football`, branch `main`
-- **Version:** `1.8.19` (plugin header in `kerry-football-admin.php`)
+- **Version:** `1.8.20` (plugin header in `kerry-football-admin.php`)
 - **DB schema version:** `1.3` (WP option `kf_db_version`)
 - **Author line:** `Kerry/Gemini` — much of the codebase was written by Gemini; comments carry version tags like `V2.1.6`, `SPORTS API V1`, `LATE PICKS V2.1` that do **not** match the plugin version. Treat them as change markers, not versions.
 
@@ -43,7 +43,9 @@ Classic procedural WordPress plugin. **No classes, no namespaces, no autoloader,
 
 **Active season lives in `$_SESSION['kf_active_season_id']`**, not in the URL. `kf_start_session_early()` starts the session on `init` priority 1 — every `session_start()` in this codebase is guarded by `session_status()` and `!headers_sent()` because unguarded calls previously caused "headers already sent" login crashes. Keep that guard on any new call. `includes/kf-season-switcher.php` owns the session, validates it against the user's memberships each request, and exposes the AJAX season switcher wired into the nav menu by `includes/kf-menus.php`.
 
-**Nav integration is filter-based:** menu items get CSS classes in wp-admin (`kf-season-switcher-placeholder`, `kf-week-summary-placeholder`, `kf-commissioner-only`, `kf-player-only`) and `kf-menus.php` rewrites or hides them via `wp_nav_menu_objects`. `kf-week-summary-placeholder` is retitled and pointed at the active season's newest non-draft week (`/week-summary/?week_id=N`) on every request, because that id changes weekly; the item is dropped when the season has no visible week. The homepage season cards carry the same link (`summary_week` in `kf_get_card_data_for_season()`), which is the only route to a week summary that does not require knowing the id.
+**Nav integration is filter-based:** menu items get CSS classes in wp-admin (`kf-season-switcher-placeholder`, `kf-week-summary-placeholder`, `kf-commissioner-only`, `kf-player-only`) and `kf-menus.php` rewrites or hides them via `wp_nav_menu_objects`. `kf-week-summary-placeholder` is retitled and pointed at the active season's newest non-draft week (`/week-summary/?week_id=N`) on every request, because that id changes weekly; the item is dropped when the season has no visible week. The homepage season cards carry the same link (`summary_week` in `kf_get_card_data_for_season()`), which is the only route to a week summary that does not require knowing the id. Cards also carry a **Season Summary** link beside it — the player button only goes there before a week is published, after which it becomes Make Your Picks — skipped only while that button is itself the season summary route, so a card never offers it twice.
+
+⚠️ **The session only ever defaults to an *active* league, and the menu switcher lists active leagues only.** A player whose leagues have all ended therefore has no active league and nothing in the switcher. Pages that can show an ended league (season summary, player dashboard) must offer those leagues from their empty state — `kf_league_switch_actions( $path, 0, $limit, true )` — or they strand exactly that player; the homepage's Past Seasons rows are the only other route.
 
 ## Permissions
 
