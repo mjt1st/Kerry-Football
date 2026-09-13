@@ -133,10 +133,10 @@ function kf_admin_dashboard_shortcode() {
 
         <!-- ===== USER MANAGEMENT ===== -->
         <div class="kf-card" style="margin-top:2em;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1em;">
+            <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 12px;margin-bottom:1em;">
                 <h2 style="margin:0;border:none;padding:0;">User Management</h2>
                 <input type="text" id="kf-user-search" placeholder="Filter by name or email&hellip;"
-                       style="max-width:220px;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;">
+                       style="flex:1 1 180px;min-width:0;max-width:220px;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;">
             </div>
 
             <div style="overflow-x:auto;">

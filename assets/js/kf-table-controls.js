@@ -722,12 +722,18 @@ document.addEventListener('DOMContentLoaded', function() {
             // width, so the names drifted further left across the row — the misaligned header
             // people were seeing. The setting is remembered per browser, so the page could also
             // come back in that state after a reload.
-            table.querySelectorAll('thead tr:first-child th').forEach(function (th) {
-                if (!th.hasAttribute('data-kf-colspan')) {
-                    th.setAttribute('data-kf-colspan', th.getAttribute('colspan') || '1');
+            //
+            // Every cell that spans two columns is a player's Pick + Points: the header, the footer
+            // totals, and the "Hidden" cells shown before the deadline. Only the header was
+            // rewritten until 1.8.20, so with Hide points on each total sat one player to the right
+            // of its name. The footer labels used to span two columns as well; they are single
+            // cells now, which is what makes "colspan 2" mean "a player" without exception.
+            table.querySelectorAll('th[colspan], td[colspan]').forEach(function (cell) {
+                if (!cell.hasAttribute('data-kf-colspan')) {
+                    cell.setAttribute('data-kf-colspan', cell.getAttribute('colspan') || '1');
                 }
-                if (th.getAttribute('data-kf-colspan') === '2') {
-                    th.setAttribute('colspan', state.hidePoints ? '1' : '2');
+                if (cell.getAttribute('data-kf-colspan') === '2') {
+                    cell.setAttribute('colspan', state.hidePoints ? '1' : '2');
                 }
             });
 

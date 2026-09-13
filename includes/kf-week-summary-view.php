@@ -344,6 +344,7 @@ function kf_week_summary_view() {
                 <?php endif; ?>
             </div>
         </div>
+        <p class="kf-league-context kf-no-print"><?php echo esc_html($week->season_name); ?></p>
         
         <?php
         // --- TIMEZONE FIX ---
@@ -453,14 +454,11 @@ function kf_week_summary_view() {
             <?php endif; ?>
         </div>
         
-        <div id="kf-printable-content"> 
-            <div class="kf-print-header">
-                <h1><?php echo esc_html($week->season_name); ?> - Week <?php echo esc_html($week->week_number); ?> Summary</h1>
-            </div>
-            <?php // kf-table-frozen bounds this box's height so the sticky header and first
-                  // column have a scroll container to stick inside. See kf-styles.css. ?>
-            <div class="kf-table-wrapper kf-table-frozen">
-                <div class="kf-zoom-container">
+        <?php
+        // The compare panel sits OUTSIDE the table's scroll box. Inside it, swiping the table
+        // sideways slid the controls off screen with the grid, and on a phone the panel used about
+        // 200px of the box's height before the first game row.
+        ?>
                     <?php
                     // Compare toggle. Hidden while picks are concealed (pre-deadline for players),
                     // since there is nothing to compare. Purely presentational: everything it does
@@ -510,6 +508,15 @@ function kf_week_summary_view() {
                         <span class="kf-compare-legend" id="kf-compare-legend"></span>
                     </div>
                     <?php endif; ?>
+
+        <div id="kf-printable-content">
+            <div class="kf-print-header">
+                <h1><?php echo esc_html($week->season_name); ?> - Week <?php echo esc_html($week->week_number); ?> Summary</h1>
+            </div>
+            <?php // kf-table-frozen bounds this box's height so the sticky header and first
+                  // column have a scroll container to stick inside. See kf-styles.css. ?>
+            <div class="kf-table-wrapper kf-table-frozen">
+                <div class="kf-zoom-container">
 
                     <table class="kf-table" id="kf-summary-table">
                         <thead>
@@ -798,7 +805,7 @@ function kf_week_summary_view() {
                         <tfoot class="kf-table-footer">
                              <?php if ($is_finalized): ?>
                                  <tr class="kf-footer-header">
-                                     <th colspan="2">Player Totals</th>
+                                     <th>Player Totals</th><th aria-hidden="true"></th>
                                      <?php foreach ($players as $player_id => $player_name): ?>
                                          <th colspan="2" class="<?php if ($player_id == $current_user_id) echo 'kf-current-player-col'; ?>" style="text-align: center;">
                                              <div class="kf-header-cell-content">
@@ -822,7 +829,7 @@ function kf_week_summary_view() {
                                      <?php endif; ?>
                                  </tr>
                                  <tr>
-                                     <td colspan="2"><strong>Subtotal</strong></td>
+                                     <td><strong>Subtotal</strong></td><td aria-hidden="true"></td>
                                      <?php foreach ($players as $player_id => $player_name): ?>
                                          <td colspan="2" class="<?php if ($player_id == $current_user_id) echo 'kf-current-player-col'; ?>" style="text-align: center;">
                                              <?php echo isset($finalized_scores[$player_id]) ? esc_html($finalized_scores[$player_id]['subtotal']) : '-'; ?>
@@ -835,7 +842,7 @@ function kf_week_summary_view() {
                                      <?php endif; ?>
                                  </tr>
                                  <tr>
-                                     <td colspan="2"><strong>Wins</strong></td>
+                                     <td><strong>Wins</strong></td><td aria-hidden="true"></td>
                                      <?php foreach ($players as $player_id => $player_name): ?>
                                          <td colspan="2" class="<?php if ($player_id == $current_user_id) echo 'kf-current-player-col'; ?>" style="text-align: center;">
                                              <?php echo isset($finalized_scores[$player_id]) ? esc_html($finalized_scores[$player_id]['wins']) : '-'; ?>
@@ -848,7 +855,7 @@ function kf_week_summary_view() {
                                      <?php endif; ?>
                                  </tr>
                                  <tr>
-                                     <td colspan="2"><strong>MWOW Bonus</strong></td>
+                                     <td><strong>MWOW Bonus</strong></td><td aria-hidden="true"></td>
                                      <?php foreach ($players as $player_id => $player_name): ?>
                                          <td colspan="2" class="<?php if ($player_id == $current_user_id) echo 'kf-current-player-col'; ?>" style="text-align: center;">
                                              <?php echo isset($finalized_scores[$player_id]) ? esc_html($finalized_scores[$player_id]['mwow_bonus_awarded']) : '-'; ?>
@@ -859,7 +866,7 @@ function kf_week_summary_view() {
                                      <?php endif; ?>
                                  </tr>
                                  <tr class="kf-total-row">
-                                     <td colspan="2"><strong>Week Total</strong></td>
+                                     <td><strong>Week Total</strong></td><td aria-hidden="true"></td>
                                      <?php foreach ($players as $player_id => $player_name): ?>
                                          <td colspan="2" class="<?php if ($player_id == $current_user_id) echo 'kf-current-player-col'; ?>" style="text-align: center;">
                                              <?php 
@@ -871,7 +878,7 @@ function kf_week_summary_view() {
                                              }
                                              echo wp_kses($display_final_score, ['strike' => []]);
                                              ?>
-                                             <sup style="color: #FFD700;"><?php echo isset($week_ranks[$player_id]) ? esc_html($week_ranks[$player_id]) : '-'; ?></sup>
+                                             <sup class="kf-rank-gold"><?php echo isset($week_ranks[$player_id]) ? esc_html($week_ranks[$player_id]) : '-'; ?></sup>
                                          </td>
                                      <?php endforeach; ?>
                                      <?php if ($last_week_bpow_winner_id && !$picks_are_hidden): ?>
@@ -881,10 +888,10 @@ function kf_week_summary_view() {
                                      <?php endif; ?>
                                  </tr>
                                  <tr class="kf-season-total-row">
-                                     <td colspan="2"><strong>Season Total</strong></td>
+                                     <td><strong>Season Total</strong></td><td aria-hidden="true"></td>
                                      <?php foreach ($players as $player_id => $player_name): ?>
                                          <td colspan="2" class="<?php if ($player_id == $current_user_id) echo 'kf-current-player-col'; ?>" style="text-align: center;">
-                                             <?php echo isset($season_totals[$player_id]) ? esc_html($season_totals[$player_id]) : '-'; ?> <sup style="color: #FFD700;"><?php echo isset($season_ranks[$player_id]) ? esc_html($season_ranks[$player_id]) : '-'; ?></sup>
+                                             <?php echo isset($season_totals[$player_id]) ? esc_html($season_totals[$player_id]) : '-'; ?> <sup class="kf-rank-gold"><?php echo isset($season_ranks[$player_id]) ? esc_html($season_ranks[$player_id]) : '-'; ?></sup>
                                          </td>
                                      <?php endforeach; ?>
                                      <?php if ($last_week_bpow_winner_id && !$picks_are_hidden): ?>
@@ -895,7 +902,7 @@ function kf_week_summary_view() {
                                  </tr>
                             <?php else: // NOT FINALIZED FOOTER ?>
                                 <tr class="kf-total-row">
-                                     <td colspan="2"><strong>Live Subtotal</strong></td>
+                                     <td><strong>Live Subtotal</strong></td><td aria-hidden="true"></td>
                                      <?php foreach ($players as $player_id => $player_name): ?>
                                          <td colspan="2" class="<?php if ($player_id == $current_user_id) echo 'kf-current-player-col'; ?>" style="text-align: center;">
                                              <?php echo esc_html($week_totals[$player_id] ?? '-'); ?>
@@ -910,11 +917,11 @@ function kf_week_summary_view() {
                             <?php endif; ?>
                         </tfoot>
                     </table>
-                    <div class="kf-rank-legend kf-no-print" style="text-align: right; font-size: 0.9em; color: #555; margin-top: 10px;">
-                        <span style="color: #FFD700;">Gold Rank</span>: Indicates player ranking by week/season total score (highest to lowest).
-                    </div>
                 </div>
             </div>
+                    <div class="kf-rank-legend kf-no-print" style="text-align: right; font-size: 0.9em; color: #555; margin-top: 10px;">
+                        <span style="color: #8a6d00;">Gold Rank</span>: Indicates player ranking by week/season total score (highest to lowest).
+                    </div>
         </div>
     </div>
 

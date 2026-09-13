@@ -180,7 +180,7 @@ function kf_season_summary_view() {
         <?php endif; ?>
 
         <div class="kf-table-wrapper">
-            <table class="kf-table">
+            <table class="kf-table kf-season-summary-table">
                 <thead>
                     <tr>
                         <th>Week</th>
@@ -272,20 +272,20 @@ function kf_season_summary_view() {
                             </tr>
                         <?php endforeach; ?>
                         <tr style="font-weight:bold; background-color: #f1f1f1;">
-                            <td colspan="2">Total</td>
+                            <td>Total</td><td aria-hidden="true"></td>
                             <?php foreach ($players_to_display as $uid => $name): ?>
                                 <td style="text-align:center;">
-                                    <?php echo esc_html($season_totals[$uid]); ?> <sup style="color: #FFD700;"><?php echo isset($ranks[$uid]) ? esc_html($ranks[$uid]) : '-'; ?></sup>
+                                    <?php echo esc_html($season_totals[$uid]); ?> <sup class="kf-rank-gold"><?php echo isset($ranks[$uid]) ? esc_html($ranks[$uid]) : '-'; ?></sup>
                                 </td>
                             <?php endforeach; ?>
                         </tr>
                     <?php endif; ?>
                 </tbody>
             </table>
-            <div class="kf-rank-legend" style="text-align: right; font-size: 0.9em; color: #555; margin-top: 10px;">
-                <span style="color: #FFD700;">Gold Rank</span>: Indicates player ranking by season total score (highest to lowest).
-            </div>
         </div>
+            <div class="kf-rank-legend" style="text-align: right; font-size: 0.9em; color: #555; margin-top: 10px;">
+                <span class="kf-rank-gold">Gold Rank</span>: Indicates player ranking by season total score (highest to lowest).
+            </div>
     </div>
     <?php
     return ob_get_clean();

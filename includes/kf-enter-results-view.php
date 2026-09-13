@@ -221,7 +221,7 @@ function kf_enter_results_shortcode() {
             <?php wp_nonce_field('kf_save_results_action_' . $week_id, 'kf_results_nonce'); ?>
             <p>For each matchup, select the winning team, <strong>or choose “Tie”</strong>. For the tiebreaker, enter the total points. You can save your progress at any time.</p>
 
-            <table class="kf-table">
+            <table class="kf-table kf-results-table">
                 <thead>
                     <tr>
                         <th>Matchup</th>
@@ -236,7 +236,9 @@ function kf_enter_results_shortcode() {
                     ?>
                     <tr>
                         <td>
-                            <strong><?php echo esc_html($matchup->team_a); ?></strong> vs <strong><?php echo esc_html($matchup->team_b); ?></strong>
+                            <?php // Away @ home, like every other page — the score beside it is away–home, and listing
+                                  // home first made a 31–17 win read as a 17–31 loss. ?>
+                            <strong><?php echo esc_html($matchup->team_b); ?></strong> @ <strong><?php echo esc_html($matchup->team_a); ?></strong>
                             <?php
                             // Kickoff time, so the commissioner can see at a glance which games
                             // have even started. Stored UTC, shown in the site timezone.
@@ -293,11 +295,11 @@ function kf_enter_results_shortcode() {
                             <?php else: ?>
                                 <select name="results[<?php echo esc_attr($matchup->id); ?>]">
                                     <option value="">-- Result Pending --</option>
-                                    <option value="<?php echo esc_attr($matchup->team_a); ?>" <?php selected($matchup->result, $matchup->team_a); ?>>
-                                        <?php echo esc_html($matchup->team_a); ?>
-                                    </option>
                                     <option value="<?php echo esc_attr($matchup->team_b); ?>" <?php selected($matchup->result, $matchup->team_b); ?>>
                                         <?php echo esc_html($matchup->team_b); ?>
+                                    </option>
+                                    <option value="<?php echo esc_attr($matchup->team_a); ?>" <?php selected($matchup->result, $matchup->team_a); ?>>
+                                        <?php echo esc_html($matchup->team_a); ?>
                                     </option>
                                     <option value="TIE" <?php echo (strtolower((string)$matchup->result) === 'tie') ? 'selected' : ''; ?>>Tie</option>
                                 </select>

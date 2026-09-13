@@ -306,21 +306,19 @@ function _kf_display_picks_form(
             <tr data-favorite="<?php echo esc_attr($fav_team); ?>" data-is-tossup="<?php echo $is_tossup ? '1' : '0'; ?>">
                 <td>
                     <?php echo esc_html($matchup->team_b . ' @ ' . $matchup->team_a); ?>
-                    <?php if ($is_tossup && $auto_pick_favs_enabled): ?>
-                        <span class="kf-tossup-badge" title="No spread available &mdash; this is a pick&rsquo;em. Auto-fill will skip this game.">&#10067; Pick&rsquo;em</span>
-                    <?php endif; ?>
+                    <?php if ($is_tossup && $auto_pick_favs_enabled):
+                        // Auto-fill skips both, but they are different facts: a posted line of zero
+                        // is a pick'em; no line at all is just no line.
+                        if ($spread_h === null): ?>
+                        <span class="kf-tossup-badge" title="No spread posted for this game. Auto-fill will skip it.">No line</span>
+                    <?php else: ?>
+                        <span class="kf-tossup-badge" title="Posted as a pick&rsquo;em &mdash; no favourite. Auto-fill will skip this game.">&#10067; Pick&rsquo;em</span>
+                    <?php endif; endif; ?>
                     <?php // SPORTS API V1: Show odds below matchup name if available ?>
                     <?php if ($has_odds): ?>
                         <div class="kf-odds-line">
                             <?php if ($matchup->spread_home !== null): ?>
-                                <span>Spread: <?php
-                                    $spread_val = floatval($matchup->spread_home);
-                                    $spread_display = ($spread_val > 0 ? '+' : '') . number_format($spread_val, 1);
-                                    // Figure out which team is the favorite
-                                    $fav_team = $spread_val < 0 ? esc_html($matchup->team_a) : esc_html($matchup->team_b);
-                                    $fav_spread = $spread_val < 0 ? $spread_display : (($matchup->spread_away !== null) ? (floatval($matchup->spread_away) > 0 ? '+' : '') . number_format(floatval($matchup->spread_away), 1) : '');
-                                    echo esc_html($fav_team) . ' ' . esc_html($fav_spread);
-                                ?></span>
+                                <span>Spread: <?php echo esc_html( _kf_spread_label( $matchup ) ); ?></span>
                             <?php endif; ?>
                             <?php if ($matchup->over_under !== null): ?>
                                 <span>O/U: <?php echo esc_html(number_format(floatval($matchup->over_under), 1)); ?></span>
@@ -368,13 +366,7 @@ function _kf_display_picks_form(
                     <?php if ($tb_has_odds): ?>
                         <div class="kf-odds-line">
                             <?php if ($tiebreaker_matchup->spread_home !== null): ?>
-                                <span>Spread: <?php
-                                    $sp = floatval($tiebreaker_matchup->spread_home);
-                                    $sp_d = ($sp > 0 ? '+' : '') . number_format($sp, 1);
-                                    $fav = $sp < 0 ? esc_html($tiebreaker_matchup->team_a) : esc_html($tiebreaker_matchup->team_b);
-                                    $fav_sp = $sp < 0 ? $sp_d : (($tiebreaker_matchup->spread_away !== null) ? (floatval($tiebreaker_matchup->spread_away) > 0 ? '+' : '') . number_format(floatval($tiebreaker_matchup->spread_away), 1) : '');
-                                    echo esc_html($fav) . ' ' . esc_html($fav_sp);
-                                ?></span>
+                                <span>Spread: <?php echo esc_html( _kf_spread_label( $tiebreaker_matchup ) ); ?></span>
                             <?php endif; ?>
                             <?php if ($tiebreaker_matchup->over_under !== null): ?>
                                 <span>O/U: <?php echo esc_html(number_format(floatval($tiebreaker_matchup->over_under), 1)); ?></span>
@@ -390,6 +382,30 @@ function _kf_display_picks_form(
     </table>
     <?php
     echo '</div>'; // .kf-form-section
+}
+
+/**
+ * Plain-text spread line for a matchup row, or '' when no line is posted. Escape on output, once.
+ *
+ * A zero line is a posted pick'em and says so: naming a team beside "0.0" read as if that team
+ * were favoured. The favourite is named from spread_home's sign with the favourite's own negative
+ * number, the same rule as the CSV export. Replaces two copies that esc_html()'d the team name
+ * and then escaped it again on output, so Texas A&M rendered as "Texas A&amp;M".
+ *
+ * @param object $matchup Row with team_a (home), team_b (away), spread_home.
+ * @return string
+ */
+function _kf_spread_label( $matchup ) {
+    if ( $matchup->spread_home === null || $matchup->spread_home === '' ) {
+        return '';
+    }
+    $sh = (float) $matchup->spread_home;
+    if ( $sh == 0.0 ) {
+        return "Pick'em";
+    }
+    return $sh < 0
+        ? $matchup->team_a . ' ' . number_format( $sh, 1 )
+        : $matchup->team_b . ' ' . number_format( -$sh, 1 );
 }
 
 // ---------- Shortcode ----------

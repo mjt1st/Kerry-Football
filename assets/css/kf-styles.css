@@ -1501,6 +1501,12 @@
 
 /* --- Sticky first column on all wide tables --- */
 .kf-table-wrapper { position: relative; }
+/* A pinned cell takes its row's colour (background: inherit, below). Rows without a stripe had no
+   colour at all, so on every other row the pinned cell was see-through and the columns scrolling
+   underneath showed through it — team names over picks. Give every row a solid ground; stripes,
+   live rows and inline row colours are all more specific and still win. */
+.kf-table tbody tr,
+.kf-table tfoot tr { background-color: #fff; }
 .kf-table th:first-child,
 .kf-table td:first-child {
     position: sticky;
@@ -1518,7 +1524,8 @@
     z-index: 3;
     background: #fff;
 }
-.kf-table tr:nth-of-type(even) td:first-child { background: #f9f9f9; }
+/* (No separate even-row rule: with every row coloured, inherit already gives the stripe — and the
+   old explicit grey painted a live game's pinned cell grey inside a yellow row.) */
 .kf-table td.kf-win:first-child  { background: #d4edda; }
 .kf-table td.kf-loss:first-child { background: #f8d7da; }
 .kf-table td.kf-tie:first-child  { background: #e6f2ff; }
@@ -2150,6 +2157,69 @@ body.admin-bar .kf-week-sticky-header { top: 32px; }
     color: #6b7280;
     font-weight: 600;
     letter-spacing: .02em;
+}
+
+/* --- Week summary: only the corner is frozen on both axes (2) ---
+   th:first-child also matched the first cell of the SECOND header row — the first player's "Pick"
+   — which then stuck to the left edge and drew over the corner whenever the grid scrolled. */
+#kf-summary-table thead tr + tr th:first-child { left: auto; box-shadow: none; }
+.kf-table-frozen #kf-summary-table thead tr + tr th:first-child { z-index: 12; }
+
+/* The print title is for paper; on screen the page title and league line already say it (6). */
+.kf-print-header { display: none; }
+@media print { .kf-print-header { display: block; } }
+
+/* Gold that can be read on white (9). The bright #FFD700 was about 1.4:1. */
+.kf-rank-gold { color: #8a6d00; font-weight: 700; }
+
+/* Season summary: keep "Week 12" on one line in the pinned column (10). */
+.kf-season-summary-table td:first-child { white-space: nowrap; }
+
+/* Homepage cards (13, 14): never wider than the screen; long names wrap beside the badge. */
+.kf-season-cards-container { grid-template-columns: repeat(auto-fill, minmax(min(350px, 100%), 1fr)); }
+.kf-card-header { gap: 10px; }
+.kf-card-header h3 { min-width: 0; overflow-wrap: break-word; }
+.kf-card-badge { flex: none; white-space: nowrap; }
+
+@media (max-width: 600px) {
+    /* Bigger targets for the small text links on cards. */
+    .kf-card-quick-links a { display: inline-block; padding: 6px 2px; }
+
+    /* Picks: winner dropdowns the full card width, not sized to the longest team name. */
+    .kf-picks-table-standard .kf-pick-select,
+    .kf-picks-table-bpow .kf-pick-select { width: 100%; }
+
+    /* Enter Results as cards (15). As a table it was ~550px wide on a 375px phone, with the
+       Result dropdowns off the right edge. Matchup and Result take the full width; score and
+       status share the line between them. */
+    .kf-table.kf-results-table,
+    .kf-table.kf-results-table tbody { display: block; width: 100%; }
+    .kf-table.kf-results-table thead { display: none; }
+    .kf-table.kf-results-table tbody tr {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 6px 12px;
+        border: 1px solid #dde3ea;
+        border-radius: 10px;
+        padding: 10px 14px;
+        margin-bottom: 12px;
+        background: #fff;
+    }
+    .kf-table.kf-results-table td {
+        display: block;
+        border: none;
+        padding: 0;
+        position: static;
+        box-shadow: none;
+        background: transparent;
+        width: auto !important;
+    }
+    .kf-table.kf-results-table td:first-child,
+    .kf-table.kf-results-table td:last-child { grid-column: 1 / -1; }
+    .kf-table.kf-results-table td.kf-status-cell { text-align: right; }
+    .kf-table.kf-results-table select,
+    .kf-table.kf-results-table input { width: 100%; }
 }
 
 /* --- Picks CSV export bar --- */
