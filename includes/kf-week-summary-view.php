@@ -260,7 +260,7 @@ function kf_week_summary_view() {
             if ($pick_data && $matchup->result) {
                 if ($is_tie) {
                     $live_totals[$player_id]['subtotal'] += (int)floor(((int)$pick_data->point_value) / 2);
-                } elseif (strcasecmp(trim($pick_data->pick), trim($matchup->result)) == 0) {
+                } elseif (kf_team_key($pick_data->pick) === kf_team_key($matchup->result)) {
                     $live_totals[$player_id]['wins']++;
                     $live_totals[$player_id]['subtotal'] += (int)$pick_data->point_value;
                 }
@@ -272,7 +272,7 @@ function kf_week_summary_view() {
             if ($bpow_pick_data && $matchup->result) {
                 if ($is_tie) {
                     $bpow_live_totals['subtotal'] += (int)floor(((int)$bpow_pick_data->point_value) / 2);
-                } elseif (strcasecmp(trim($bpow_pick_data->pick), trim($matchup->result)) == 0) {
+                } elseif (kf_team_key($bpow_pick_data->pick) === kf_team_key($matchup->result)) {
                     $bpow_live_totals['wins']++;
                     $bpow_live_totals['subtotal'] += (int)$bpow_pick_data->point_value;
                 }
@@ -652,7 +652,7 @@ function kf_week_summary_view() {
                                         $points = $pick_data ? (int)$pick_data->point_value : null;
 
                                         $is_tie = $matchup->result && in_array(strtolower(trim((string)$matchup->result)), ['tie','t','draw'], true);
-                                        $is_win = (!$is_tie) && $pick_data && $matchup->result && (strcasecmp(trim($pick_data->pick), trim($matchup->result)) == 0);
+                                        $is_win = (!$is_tie) && $pick_data && $matchup->result && (kf_team_key($pick_data->pick) === kf_team_key($matchup->result));
 
                                         if ($is_tie) {
                                             $class = 'kf-tie';
@@ -663,7 +663,7 @@ function kf_week_summary_view() {
                                             // Live game: tint pick based on whether it's currently winning
                                             if (!$matchup->result && $m_is_live && $pick_data) {
                                                 if ($current_leader !== null) {
-                                                    $class = (strcasecmp(trim($pick_data->pick), $current_leader) === 0)
+                                                    $class = (kf_team_key($pick_data->pick) === kf_team_key($current_leader))
                                                              ? 'kf-pick-live-winning'
                                                              : 'kf-pick-live-losing';
                                                 } else {
@@ -690,7 +690,7 @@ function kf_week_summary_view() {
                                         $bpow_points = $bpow_pick_data ? (int)$bpow_pick_data->point_value : null;
 
                                         $is_tie = $matchup->result && in_array(strtolower(trim((string)$matchup->result)), ['tie','t','draw'], true);
-                                        $bpow_is_win = (!$is_tie) && $bpow_pick_data && $matchup->result && (strcasecmp(trim($bpow_pick_data->pick), trim($matchup->result)) == 0);
+                                        $bpow_is_win = (!$is_tie) && $bpow_pick_data && $matchup->result && (kf_team_key($bpow_pick_data->pick) === kf_team_key($matchup->result));
 
                                         if ($is_tie) {
                                             $bpow_class = 'kf-tie';
@@ -700,7 +700,7 @@ function kf_week_summary_view() {
                                             $bpow_class = $bpow_is_win ? 'kf-win' : ($matchup->result ? 'kf-loss' : '');
                                             if (!$matchup->result && $m_is_live && $bpow_pick_data) {
                                                 if ($current_leader !== null) {
-                                                    $bpow_class = (strcasecmp(trim($bpow_pick_data->pick), $current_leader) === 0)
+                                                    $bpow_class = (kf_team_key($bpow_pick_data->pick) === kf_team_key($current_leader))
                                                                   ? 'kf-pick-live-winning'
                                                                   : 'kf-pick-live-losing';
                                                 } else {

@@ -108,6 +108,15 @@ function kf_commissioner_dashboard_shortcode() {
         }
     }
 
+    if ( isset( $_POST['kf_dismiss_slash_report'], $_POST['kf_dismiss_slash_nonce'] )
+         && wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['kf_dismiss_slash_nonce'] ) ), 'kf_dismiss_slash_report' ) ) {
+        $kf_done = get_option( 'kf_slash_repair_report', [] );
+        if ( is_array( $kf_done ) ) {
+            $kf_done['dismissed'] = true;
+            update_option( 'kf_slash_repair_report', $kf_done, false );
+        }
+    }
+
     $current_user_id = get_current_user_id();
 
     if ( current_user_can( 'manage_options' ) ) {
@@ -131,9 +140,39 @@ function kf_commissioner_dashboard_shortcode() {
     $cron_next_scheduled  = wp_next_scheduled( 'kf_check_game_scores' );
     $cron_report          = get_option( 'kf_cron_last_report', [] );
 
+    // One-time repair of names stored with backslashes (see kf-team-names.php). Finalized weeks keep
+    // the scores they were given, so the ones that were affected have to be re-finalized by hand.
+    $kf_slash_report = get_option( 'kf_slash_repair_report', [] );
+    $kf_slash_weeks  = ( is_array( $kf_slash_report ) && ! empty( $kf_slash_report['finalized_weeks'] ) )
+        ? $kf_slash_report['finalized_weeks'] : [];
+
     ob_start();
     ?>
     <div class="kf-container">
+        <?php if ( $kf_slash_weeks && empty( $kf_slash_report['dismissed'] ) ) : ?>
+            <div class="kf-card kf-notice-card kf-notice-warn" style="margin-bottom:1.5em;">
+                <h2 class="kf-notice-title">Some finished weeks need re-scoring</h2>
+                <p class="kf-notice-message">
+                    Team names containing an apostrophe were stored with a stray backslash, so a correct pick on
+                    one of those teams scored as a loss. The names and picks have been corrected — a snapshot of
+                    each week was taken first — but these weeks were already finalized, so their scores still
+                    reflect the old comparison. Reverse and finalize each one again to rescore it.
+                </p>
+                <ul>
+                    <?php foreach ( $kf_slash_weeks as $kf_wid => $kf_w ) : ?>
+                        <li>
+                            <a href="<?php echo esc_url( add_query_arg( 'week_id', (int) $kf_wid, site_url( '/week-summary/' ) ) ); ?>">
+                                <?php echo esc_html( $kf_w['season'] . ' — Week ' . $kf_w['week_number'] ); ?>
+                            </a>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+                <form method="POST" style="margin:0;">
+                    <?php wp_nonce_field( 'kf_dismiss_slash_report', 'kf_dismiss_slash_nonce' ); ?>
+                    <button type="submit" name="kf_dismiss_slash_report" class="kf-button kf-button-secondary">Done — hide this</button>
+                </form>
+            </div>
+        <?php endif; ?>
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1em;">
             <h1>Commissioner Dashboard</h1>
             <div style="display:flex;gap:8px;">

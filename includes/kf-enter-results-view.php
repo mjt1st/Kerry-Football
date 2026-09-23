@@ -88,7 +88,7 @@ function kf_enter_results_shortcode() {
             if (!in_array($matchup_id, $valid_matchup_ids)) {
                 continue; // Skip matchups that don't belong to this week
             }
-            $sanitized_result = sanitize_text_field(stripslashes($result));
+            $sanitized_result = sanitize_text_field( wp_unslash( $result ) );
             $wpdb->update(
                 $matchups_table,
                 ['result' => $sanitized_result],
@@ -346,6 +346,9 @@ function kf_enter_results_shortcode() {
     <script>
     (function() {
         var KF_PLAYERS   = <?php echo wp_json_encode($js_players); ?>;
+        // Same normalisation as kf_team_key() in PHP: a pick stored before 1.8.24 can carry
+        // backslashes that the result does not.
+        function kfTeamKey(v) { return String(v == null ? '' : v).replace(/\\/g, '').trim().toLowerCase(); }
         var KF_MATCHUPS  = <?php echo wp_json_encode($js_matchups); ?>;
         var KF_PICKS     = <?php echo wp_json_encode($js_matchup_picks); ?>;
 
@@ -364,7 +367,7 @@ function kf_enter_results_shortcode() {
                     var pts  = picks[p.id].pts;
                     if (isTie) {
                         totals[p.id] += Math.floor(pts / 2);
-                    } else if (pick.toLowerCase() === result.toLowerCase()) {
+                    } else if (kfTeamKey(pick) === kfTeamKey(result)) {
                         totals[p.id] += pts;
                     }
                 });

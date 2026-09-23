@@ -207,8 +207,11 @@ function kf_week_setup_form() {
                 $over_unders      = $_POST['over_under'] ?? [];
 
                 foreach ($team_a_list as $index => $teamA) {
-                    $teamA = sanitize_text_field($teamA);
-                    $teamB = sanitize_text_field($team_b_list[$index]);
+                    // wp_unslash: WordPress backslashes every apostrophe in $_POST, so "Hawai'i
+                    // Rainbow Warriors" was stored as "Hawai\'i Rainbow Warriors" — and a pick, which
+                    // posts that stored name back, picked up a second backslash and never matched it.
+                    $teamA = sanitize_text_field( wp_unslash( $teamA ) );
+                    $teamB = sanitize_text_field( wp_unslash( $team_b_list[$index] ) );
                     if (!empty($teamA) && !empty($teamB)) {
                         $matchup_data = [
                             'week_id' => $week_id,

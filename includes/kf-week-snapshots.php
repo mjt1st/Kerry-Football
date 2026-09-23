@@ -195,6 +195,7 @@ function kf_snapshot_reason_label( $reason ) {
         'pre_reverse'       => 'Before reversing',
         'pre_matchup_write' => 'Before rewriting games',
         'pre_late_picks'    => 'Before approving late picks',
+        'pre_slash_repair'  => 'Before removing stray backslashes',
         'manual'            => 'Manual',
     ];
     return $labels[ $reason ] ?? ucfirst( str_replace( '_', ' ', $reason ) );

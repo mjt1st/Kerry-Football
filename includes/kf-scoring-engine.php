@@ -113,14 +113,14 @@ function _kf_calculate_player_stats_for_week($week_id) {
                 SUM(
                     CASE
                         WHEN LOWER(TRIM(m.result)) IN ('tie','t','draw') THEN 0
-                        WHEN LOWER(TRIM(p.pick)) = LOWER(TRIM(m.result)) THEN 1
+                        WHEN " . kf_sql_team_key('p.pick') . " = " . kf_sql_team_key('m.result') . " THEN 1
                         ELSE 0
                     END
                 ) AS wins,
                 SUM(
                     CASE
                         WHEN LOWER(TRIM(m.result)) IN ('tie','t','draw') THEN FLOOR(p.point_value / 2)
-                        WHEN LOWER(TRIM(p.pick)) = LOWER(TRIM(m.result)) THEN p.point_value
+                        WHEN " . kf_sql_team_key('p.pick') . " = " . kf_sql_team_key('m.result') . " THEN p.point_value
                         ELSE 0
                     END
                 ) AS subtotal
@@ -142,14 +142,14 @@ function _kf_calculate_player_stats_for_week($week_id) {
                     SUM(
                         CASE
                             WHEN LOWER(TRIM(m.result)) IN ('tie','t','draw') THEN 0
-                            WHEN LOWER(TRIM(p.pick)) = LOWER(TRIM(m.result)) THEN 1
+                            WHEN " . kf_sql_team_key('p.pick') . " = " . kf_sql_team_key('m.result') . " THEN 1
                             ELSE 0
                         END
                     ) AS wins,
                     SUM(
                         CASE
                             WHEN LOWER(TRIM(m.result)) IN ('tie','t','draw') THEN FLOOR(p.point_value / 2)
-                            WHEN LOWER(TRIM(p.pick)) = LOWER(TRIM(m.result)) THEN p.point_value
+                            WHEN " . kf_sql_team_key('p.pick') . " = " . kf_sql_team_key('m.result') . " THEN p.point_value
                             ELSE 0
                         END
                     ) AS subtotal

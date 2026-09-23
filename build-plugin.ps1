@@ -86,6 +86,7 @@ $ExcludeDirs = @(
     '.claude/',
     'Vendor/',
     'dist/',
+    'tests/',
     'node_modules/'
 )
 

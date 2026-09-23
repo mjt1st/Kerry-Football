@@ -341,8 +341,10 @@ function _kf_display_picks_form(
                 <td>
                     <select name="<?php echo esc_attr($pick_name_prefix); ?>[<?php echo (int)$matchup->id; ?>]" required class="kf-pick-select">
                         <option value="">-- Select Winner --</option>
-                        <option value="<?php echo esc_attr($matchup->team_a); ?>" <?php selected($saved_pick['pick'] ?? '', $matchup->team_a); ?>><?php echo esc_html($matchup->team_a); ?></option>
-                        <option value="<?php echo esc_attr($matchup->team_b); ?>" <?php selected($saved_pick['pick'] ?? '', $matchup->team_b); ?>><?php echo esc_html($matchup->team_b); ?></option>
+                        <?php // Compared as keys: a pick saved before 1.8.24 carries backslashes the option value
+                              // does not, and the player's own pick came back showing nothing selected. ?>
+                        <option value="<?php echo esc_attr($matchup->team_a); ?>" <?php selected(kf_team_key($saved_pick['pick'] ?? ''), kf_team_key($matchup->team_a)); ?>><?php echo esc_html($matchup->team_a); ?></option>
+                        <option value="<?php echo esc_attr($matchup->team_b); ?>" <?php selected(kf_team_key($saved_pick['pick'] ?? ''), kf_team_key($matchup->team_b)); ?>><?php echo esc_html($matchup->team_b); ?></option>
                     </select>
                 </td>
                 <td>
@@ -584,7 +586,7 @@ function kf_my_picks_shortcode() {
             $standard_points = [];
             foreach ($std_picks_raw as $mid => $pick) {
                 $mid  = (int)$mid;
-                $pick = sanitize_text_field((string)$pick);
+                $pick = sanitize_text_field( wp_unslash( (string) $pick ) );
                 $pv   = isset($std_points_raw[$mid]) ? (int)$std_points_raw[$mid] : null;
                 // accept normal rows (pick != '') or tiebreaker row (pv === 0 with numeric total in pick)
                 if ($pick !== '' || $pv === 0) {
@@ -598,7 +600,7 @@ function kf_my_picks_shortcode() {
             $bpow_points = [];
             foreach ($bpw_picks_raw as $mid => $pick) {
                 $mid  = (int)$mid;
-                $pick = sanitize_text_field((string)$pick);
+                $pick = sanitize_text_field( wp_unslash( (string) $pick ) );
                 if ($pick === '') { continue; }           // BPOW has no tiebreaker row
                 $pv   = isset($bpw_points_raw[$mid]) ? (int)$bpw_points_raw[$mid] : 0;
                 $bpow_picks[$mid]  = $pick;
