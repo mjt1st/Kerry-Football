@@ -135,8 +135,12 @@ function _kf_calculate_player_stats_for_week($week_id) {
         ];
 
         // --- TIE-AWARE BPOW stats (only for last week's BPOW winner) ---
+        // The second set of picks only exists for last week's BPOW winner. $players comes from
+        // get_col(), which hands back strings, and "7" === 7 is false — so this never matched and
+        // the swap below never ran: a player whose BPOW picks beat their regular picks kept the
+        // lower score, and the summary showed their BPOW column at the regular total.
         $bpow_stats_for_score = [];
-        if ($player_id === $last_week_bpow_winner_id) {
+        if ($last_week_bpow_winner_id && (int)$player_id === (int)$last_week_bpow_winner_id) {
             $bpow_stats = $wpdb->get_row($wpdb->prepare("
                 SELECT
                     SUM(
@@ -416,3 +420,97 @@ function kf_reverse_week($week_id) {
     $wpdb->query('COMMIT');
     return true;
 }
+
+/**
+ * Finalized weeks whose BPOW score was thrown away by the bug fixed in 1.8.25.
+ *
+ * Until 1.8.25 the engine compared a string player ID to an integer one with ===, so the swap that
+ * lets a better second set of picks become the week score never ran. Weeks finalized before the fix
+ * therefore still hold the lower score. Rescoring them changes weekly ranks, Double Down outcomes
+ * and season standings, so it is not done here: the commissioner is shown which weeks they are.
+ *
+ * Read-only. Runs once, from kf_maybe_flag_bpow_rescore().
+ *
+ * @return array The report, also stored in the kf_bpow_rescore_report option.
+ */
+function kf_find_weeks_with_discarded_bpow_scores() {
+    global $wpdb;
+
+    $report = [ 'ran_at' => current_time( 'mysql', 1 ), 'weeks' => [] ];
+
+    $weeks = $wpdb->get_results(
+        "SELECT w.id, w.season_id, w.week_number, w.bpow_winner_user_id, s.name AS season_name
+         FROM {$wpdb->prefix}weeks w
+         LEFT JOIN {$wpdb->prefix}seasons s ON w.season_id = s.id
+         WHERE w.status = 'finalized'
+         ORDER BY w.season_id ASC, w.week_number ASC"
+    );
+
+    // Walking the finalized weeks in order gives each one the winner of the finalized week before
+    // it, which is the player who had a second set of picks that week.
+    $previous_winner = [];
+    foreach ( (array) $weeks as $week ) {
+        $season_id = (int) $week->season_id;
+        $player_id = isset( $previous_winner[ $season_id ] ) ? (int) $previous_winner[ $season_id ] : 0;
+        $previous_winner[ $season_id ] = (int) $week->bpow_winner_user_id;
+
+        if ( ! $player_id ) {
+            continue;
+        }
+
+        $bpow = $wpdb->get_row( $wpdb->prepare(
+            "SELECT
+                SUM(
+                    CASE
+                        WHEN LOWER(TRIM(m.result)) IN ('tie','t','draw') THEN FLOOR(p.point_value / 2)
+                        WHEN " . kf_sql_team_key( 'p.pick' ) . " = " . kf_sql_team_key( 'm.result' ) . " THEN p.point_value
+                        ELSE 0
+                    END
+                ) AS subtotal
+             FROM {$wpdb->prefix}picks p
+             JOIN {$wpdb->prefix}matchups m ON p.matchup_id = m.id
+             WHERE p.user_id = %d AND p.week_id = %d AND m.is_tiebreaker = 0 AND p.is_bpow = 1",
+            $player_id, (int) $week->id
+        ) );
+
+        $bpow_subtotal = (int) ( $bpow->subtotal ?? 0 );
+        if ( ! $bpow_subtotal ) {
+            continue; // No second set of picks was played.
+        }
+
+        $stored = $wpdb->get_row( $wpdb->prepare(
+            "SELECT score, is_bpow_score FROM {$wpdb->prefix}scores WHERE week_id = %d AND user_id = %d",
+            (int) $week->id, $player_id
+        ) );
+
+        // score already includes any Most Wins bonus, which is exactly what the swap compares against.
+        if ( ! $stored || (int) $stored->is_bpow_score === 1 || $bpow_subtotal <= (int) $stored->score ) {
+            continue;
+        }
+
+        $player = get_userdata( $player_id );
+        $report['weeks'][ (int) $week->id ] = [
+            'week_number' => (int) $week->week_number,
+            'season'      => (string) $week->season_name,
+            'player'      => $player ? $player->display_name : ( 'Player #' . $player_id ),
+            'stored'      => (int) $stored->score,
+            'bpow'        => $bpow_subtotal,
+        ];
+    }
+
+    update_option( 'kf_bpow_rescore_report', $report, false );
+
+    return $report;
+}
+
+/**
+ * Run the scan once, after the schema upgrade on init.
+ */
+function kf_maybe_flag_bpow_rescore() {
+    if ( get_option( 'kf_bpow_rescore_scan_done' ) ) {
+        return;
+    }
+    update_option( 'kf_bpow_rescore_scan_done', '1', false ); // Set first: never retry in a loop on failure.
+    kf_find_weeks_with_discarded_bpow_scores();
+}
+add_action( 'init', 'kf_maybe_flag_bpow_rescore', 12 ); // after kf_maybe_repair_slashed_team_text()

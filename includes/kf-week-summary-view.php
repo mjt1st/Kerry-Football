@@ -286,6 +286,24 @@ function kf_week_summary_view() {
         }
     }
 
+    // The BPOW column is the same person's second set of picks, scored on its own. It has no score
+    // row of its own: when that set beats their regular one the engine makes it their week score
+    // (is_bpow_score), and otherwise nothing about it is stored. So show what these picks are
+    // actually worth — reading the player's score row here put their *other* total in this column,
+    // which is how a higher BPOW set appeared to have been overwritten by a lower one.
+    $bpow_score_counted = false;
+    $bpow_column_totals = $bpow_live_totals;
+    if ($last_week_bpow_winner_id && isset($finalized_scores[$last_week_bpow_winner_id])) {
+        $bpow_score_counted = !empty($finalized_scores[$last_week_bpow_winner_id]['is_bpow_score']);
+        if ($bpow_score_counted) {
+            // Scored when the week was finalized; authoritative over a recount from the picks.
+            $bpow_column_totals = [
+                'wins'     => (int)$finalized_scores[$last_week_bpow_winner_id]['wins'],
+                'subtotal' => (int)$finalized_scores[$last_week_bpow_winner_id]['subtotal'],
+            ];
+        }
+    }
+
     $tie_check_results = [];
     $needs_resolution = false;
     if ($week->status === 'published' && $is_commissioner) {
@@ -542,6 +560,9 @@ function kf_week_summary_view() {
                                             <span><?php echo esc_html($player_name) . $winner_icon . $dd_badge; ?></span>
                                             <?php if ($is_finalized && isset($finalized_scores[$player_id])): ?>
                                                 <small class="kf-final-score">Week Total: <?php echo esc_html($finalized_scores[$player_id]['score']); ?></small>
+                                                <?php if (!empty($finalized_scores[$player_id]['is_bpow_score'])): ?>
+                                                    <small class="kf-bpow-counted">from BPOW picks</small>
+                                                <?php endif; ?>
                                             <?php elseif (!$is_finalized): ?>
                                                 <small class="kf-live-score">Live Subtotal: <span id="live-subtotal-<?php echo esc_attr($player_id); ?>">0</span></small>
                                             <?php endif; ?>
@@ -553,7 +574,10 @@ function kf_week_summary_view() {
                                         <div class="kf-header-cell-content">
                                             <span><?php echo esc_html($bpow_winner_name . ' (BPOW)'); ?></span>
                                             <?php if ($is_finalized && isset($finalized_scores[$last_week_bpow_winner_id])): ?>
-                                                <small class="kf-final-score">Week Total: <?php echo esc_html($finalized_scores[$last_week_bpow_winner_id]['score']); ?></small>
+                                                <small class="kf-final-score">Week Total: <?php echo esc_html($bpow_column_totals['subtotal']); ?></small>
+                                                <?php if ($bpow_score_counted): ?>
+                                                    <small class="kf-bpow-counted">counted as their week score</small>
+                                                <?php endif; ?>
                                             <?php elseif (!$is_finalized): ?>
                                                 <small class="kf-live-score">Live Subtotal: <span id="live-subtotal-bpow-<?php echo esc_attr($last_week_bpow_winner_id); ?>">0</span></small>
                                             <?php endif; ?>
@@ -816,6 +840,9 @@ function kf_week_summary_view() {
                                                  ?>
                                                  <span><?php echo esc_html($player_name) . $winner_icon; ?></span>
                                                  <small class="kf-final-score">Week Total: <?php echo esc_html($finalized_scores[$player_id]['score']); ?></small>
+                                                 <?php if (!empty($finalized_scores[$player_id]['is_bpow_score'])): ?>
+                                                     <small class="kf-bpow-counted">from BPOW picks</small>
+                                                 <?php endif; ?>
                                              </div>
                                          </th>
                                      <?php endforeach; ?>
@@ -823,7 +850,10 @@ function kf_week_summary_view() {
                                          <th colspan="2" class="kf-bpow-column <?php if ($last_week_bpow_winner_id == $current_user_id) echo 'kf-current-player-col'; ?>" style="text-align: center;">
                                              <div class="kf-header-cell-content">
                                                  <span><?php echo esc_html($bpow_winner_name . ' (BPOW)'); ?></span>
-                                                 <small class="kf-final-score">Week Total: <?php echo esc_html($finalized_scores[$last_week_bpow_winner_id]['score']); ?></small>
+                                                 <small class="kf-final-score">Week Total: <?php echo esc_html($bpow_column_totals['subtotal']); ?></small>
+                                                 <?php if ($bpow_score_counted): ?>
+                                                     <small class="kf-bpow-counted">counted as their week score</small>
+                                                 <?php endif; ?>
                                              </div>
                                          </th>
                                      <?php endif; ?>
@@ -837,7 +867,7 @@ function kf_week_summary_view() {
                                      <?php endforeach; ?>
                                      <?php if ($last_week_bpow_winner_id && !$picks_are_hidden): ?>
                                          <td colspan="2" class="kf-bpow-column <?php if ($last_week_bpow_winner_id == $current_user_id) echo 'kf-current-player-col'; ?>">
-                                             <?php echo isset($finalized_scores[$last_week_bpow_winner_id]) ? esc_html($finalized_scores[$last_week_bpow_winner_id]['subtotal']) : '-'; ?>
+                                             <?php echo esc_html($bpow_column_totals['subtotal']); ?>
                                          </td>
                                      <?php endif; ?>
                                  </tr>
@@ -850,7 +880,7 @@ function kf_week_summary_view() {
                                      <?php endforeach; ?>
                                      <?php if ($last_week_bpow_winner_id && !$picks_are_hidden): ?>
                                           <td colspan="2" class="kf-bpow-column <?php if ($last_week_bpow_winner_id == $current_user_id) echo 'kf-current-player-col'; ?>">
-                                             <?php echo isset($finalized_scores[$last_week_bpow_winner_id]) ? esc_html($finalized_scores[$last_week_bpow_winner_id]['wins']) : '-'; ?>
+                                             <?php echo esc_html($bpow_column_totals['wins']); ?>
                                          </td>
                                      <?php endif; ?>
                                  </tr>
@@ -883,7 +913,7 @@ function kf_week_summary_view() {
                                      <?php endforeach; ?>
                                      <?php if ($last_week_bpow_winner_id && !$picks_are_hidden): ?>
                                          <td colspan="2" class="kf-bpow-column <?php if ($last_week_bpow_winner_id == $current_user_id) echo 'kf-current-player-col'; ?>">
-                                             <?php echo isset($finalized_scores[$last_week_bpow_winner_id]) ? esc_html($finalized_scores[$last_week_bpow_winner_id]['score']) : esc_html($bpow_live_totals['subtotal']); ?>
+                                             <?php echo esc_html($bpow_column_totals['subtotal']); ?>
                                          </td>
                                      <?php endif; ?>
                                  </tr>
@@ -921,6 +951,9 @@ function kf_week_summary_view() {
             </div>
                     <div class="kf-rank-legend kf-no-print" style="text-align: right; font-size: 0.9em; color: #555; margin-top: 10px;">
                         <span style="color: #8a6d00;">Gold Rank</span>: Indicates player ranking by week/season total score (highest to lowest).
+                        <?php if ($last_week_bpow_winner_id && !$picks_are_hidden): ?>
+                            <br><strong>BPOW</strong>: last week's top scorer plays a second set of picks. If that set scores higher than their regular picks it becomes their week total, and the Most Wins bonus does not apply.
+                        <?php endif; ?>
                     </div>
         </div>
     </div>

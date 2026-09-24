@@ -80,7 +80,7 @@ function kf_season_setup_shortcode() {
             $num_weeks = intval($_POST['num_weeks']);
             $weekly_points = intval($_POST['weekly_point_total']);
             $matchup_count = intval($_POST['default_matchup_count']);
-            $point_values = sanitize_text_field($_POST['default_point_values']);
+            $point_values = kf_normalize_point_values( wp_unslash( $_POST['default_point_values'] ) );
             $mwow_bonus = intval($_POST['mwow_bonus']);
             $dd_max = intval($_POST['dd_max']);
             $dd_week = intval($_POST['dd_start_week']);

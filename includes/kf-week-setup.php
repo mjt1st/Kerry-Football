@@ -118,7 +118,7 @@ function kf_week_setup_form() {
                 // Correctly convert the local time from the form input to GMT/UTC for database storage.
                 'submission_deadline'   => get_gmt_from_date(sanitize_text_field($_POST['deadline'])),
                 'matchup_count'       => intval($_POST['matchup_count']),
-                'point_values'        => sanitize_text_field($_POST['point_values']),
+                'point_values'        => kf_normalize_point_values( wp_unslash( $_POST['point_values'] ) ),
             ];
 
             $is_publishing = isset($_POST['kf_week_publish']);
@@ -342,6 +342,10 @@ function kf_week_setup_form() {
         $matchup_count_val = $season->default_matchup_count;
         $point_values_val = $season->default_point_values;
     }
+
+    // Fill the field with the list in canonical form, so a typo stored on the league's default
+    // ("...,5,4.3.2.1") is visibly corrected here rather than copied onto another week.
+    $point_values_val = kf_normalize_point_values($point_values_val);
 
     ob_start(); ?>
     <div class="kf-container">
@@ -865,7 +869,8 @@ function kf_week_setup_form() {
 
         function validatePoints() {
             if (!pointsInput) return;
-            const values = pointsInput.value.split(',').map(v => parseInt(v.trim(), 10));
+            // Any run of non-digits separates two values, matching kf_parse_point_values() on save.
+            const values = pointsInput.value.split(/[^0-9]+/).map(v => parseInt(v, 10));
             const sum = values.filter(v => !isNaN(v)).reduce((acc, val) => acc + val, 0);
             
             pointsDisplay.textContent = sum;

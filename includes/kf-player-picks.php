@@ -193,13 +193,11 @@ function _kf_display_picks_form(
     }
 
     if ($point_values_raw !== '') {
-        // Build from CSV in week.point_values
+        // Build from the stored list. kf_parse_point_values() treats any non-digit as a separator,
+        // so a list saved with a stray full stop ("...,5,4.3.2.1") still yields every value.
         $tmp = [];
-        foreach (explode(',', $point_values_raw) as $val) {
-            $v = (int)trim($val);
-            if ($v > 0) {
-                $tmp[$v] = $v; // de-dupe by value
-            }
+        foreach (kf_parse_point_values($point_values_raw) as $v) {
+            $tmp[$v] = $v; // de-dupe by value
         }
         if (!empty($tmp)) {
             ksort($tmp, SORT_NUMERIC);
@@ -657,11 +655,9 @@ function kf_my_picks_shortcode() {
             }
 
             if ($week_point_values_raw !== '') {
-                foreach (explode(',', $week_point_values_raw) as $val) {
-                    $v = (int)trim($val);
-                    if ($v > 0) {
-                        $allowed_points[$v] = true;
-                    }
+                // Same parsing as the form that offered these values, or a valid pick is rejected.
+                foreach (kf_parse_point_values($week_point_values_raw) as $v) {
+                    $allowed_points[$v] = true;
                 }
             } else {
                 // Legacy behavior: 1..number of non-tiebreaker matchups

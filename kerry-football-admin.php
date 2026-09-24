@@ -3,7 +3,7 @@
 /**
  * Plugin Name: Kerry Football Admin
  * Description: A plugin for managing a private fantasy football league.
- * Version: 1.8.24
+ * Version: 1.8.25
  * Author: Kerry/Gemini
  *
  * * STABILITY FIX (V2.1.6): Added aggressive session start on the 'init' hook to prevent 
@@ -48,6 +48,7 @@ require_once KF_PLUGIN_PATH . 'includes/kf-scoring-engine.php';
 require_once KF_PLUGIN_PATH . 'includes/kf-season-switcher.php';
 require_once KF_PLUGIN_PATH . 'includes/kf-notices.php';
 require_once KF_PLUGIN_PATH . 'includes/kf-team-names.php';
+require_once KF_PLUGIN_PATH . 'includes/kf-point-values.php';
 require_once KF_PLUGIN_PATH . 'includes/kf-shortcodes.php';
 
 // View Handlers

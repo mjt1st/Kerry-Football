@@ -55,7 +55,9 @@ function kf_create_season_shortcode() {
             $num_weeks          = intval($_POST['num_weeks']);
             $weekly_points      = intval($_POST['weekly_point_total']);
             $matchup_count      = intval($_POST['default_matchup_count']);
-            $point_values       = sanitize_text_field( wp_unslash( $_POST['default_point_values'] ) );
+            // Normalised, not just sanitised: a list typed with a stray full stop is stored as a
+            // clean comma-separated list instead of silently losing every value after it.
+            $point_values       = kf_normalize_point_values( wp_unslash( $_POST['default_point_values'] ) );
             $mwow_bonus         = intval($_POST['mwow_bonus']);
             $dd_max             = intval($_POST['dd_max']);
             $dd_week            = intval($_POST['dd_start_week']);

@@ -76,6 +76,13 @@ function kf_edit_season_form_shortcode() {
                 $update_data['num_weeks'] = intval($_POST['num_weeks']);
             }
 
+            // Only overwrite the stored list when the form sent a usable one: blanking it would
+            // leave every new week with no point values at all.
+            $submitted_point_values = kf_normalize_point_values( wp_unslash( $_POST['default_point_values'] ?? '' ) );
+            if ($submitted_point_values !== '') {
+                $update_data['default_point_values'] = $submitted_point_values;
+            }
+
             $wpdb->update($seasons_table, $update_data, ['id' => $season_id]);
             
             // Re-fetch the data to show the updated values.
@@ -127,6 +134,19 @@ function kf_edit_season_form_shortcode() {
             <div class="kf-form-group">
                 <label for="mwow_bonus_points">MWOW Bonus Points</label>
                 <input type="number" id="mwow_bonus_points" name="mwow_bonus_points" value="<?php echo esc_attr($season->mwow_bonus_points); ?>" required>
+            </div>
+
+            <?php // Editable here because it fills in every new week: a typo in it was otherwise
+                  // impossible to correct without touching the database. ?>
+            <div class="kf-form-group">
+                <label for="default_point_values">Default Point Values (comma-separated)</label>
+                <input type="text" id="default_point_values" name="default_point_values" value="<?php echo esc_attr(kf_normalize_point_values($season->default_point_values)); ?>" required>
+                <?php $kf_points_sum = array_sum(kf_parse_point_values($season->default_point_values)); ?>
+                <p style="font-size: 0.9em; color: #777;"><em>Fills in each new week's point values. They should add up to <?php echo esc_html($season->weekly_point_total); ?>, this season's weekly total.<?php
+                    if ($kf_points_sum !== (int)$season->weekly_point_total) {
+                        echo ' <strong style="color: #d63638;">They currently add up to ' . esc_html($kf_points_sum) . '.</strong>';
+                    }
+                ?></em></p>
             </div>
 
             <hr style="margin: 2em 0;">

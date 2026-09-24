@@ -117,6 +117,15 @@ function kf_commissioner_dashboard_shortcode() {
         }
     }
 
+    if ( isset( $_POST['kf_dismiss_bpow_report'], $_POST['kf_dismiss_bpow_nonce'] )
+         && wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['kf_dismiss_bpow_nonce'] ) ), 'kf_dismiss_bpow_report' ) ) {
+        $kf_bpow_done = get_option( 'kf_bpow_rescore_report', [] );
+        if ( is_array( $kf_bpow_done ) ) {
+            $kf_bpow_done['dismissed'] = true;
+            update_option( 'kf_bpow_rescore_report', $kf_bpow_done, false );
+        }
+    }
+
     $current_user_id = get_current_user_id();
 
     if ( current_user_can( 'manage_options' ) ) {
@@ -146,6 +155,12 @@ function kf_commissioner_dashboard_shortcode() {
     $kf_slash_weeks  = ( is_array( $kf_slash_report ) && ! empty( $kf_slash_report['finalized_weeks'] ) )
         ? $kf_slash_report['finalized_weeks'] : [];
 
+    // One-time scan for weeks whose BPOW score was discarded (see kf-scoring-engine.php). Same
+    // reasoning: rescoring moves weekly ranks and season standings, so it is a deliberate act.
+    $kf_bpow_report = get_option( 'kf_bpow_rescore_report', [] );
+    $kf_bpow_weeks  = ( is_array( $kf_bpow_report ) && ! empty( $kf_bpow_report['weeks'] ) )
+        ? $kf_bpow_report['weeks'] : [];
+
     ob_start();
     ?>
     <div class="kf-container">
@@ -170,6 +185,33 @@ function kf_commissioner_dashboard_shortcode() {
                 <form method="POST" style="margin:0;">
                     <?php wp_nonce_field( 'kf_dismiss_slash_report', 'kf_dismiss_slash_nonce' ); ?>
                     <button type="submit" name="kf_dismiss_slash_report" class="kf-button kf-button-secondary">Done — hide this</button>
+                </form>
+            </div>
+        <?php endif; ?>
+        <?php if ( $kf_bpow_weeks && empty( $kf_bpow_report['dismissed'] ) ) : ?>
+            <div class="kf-card kf-notice-card kf-notice-warn" style="margin-bottom:1.5em;">
+                <h2 class="kf-notice-title">A better BPOW week was not counted</h2>
+                <p class="kf-notice-message">
+                    When a player's BPOW picks scored higher than their regular picks, that higher score was
+                    supposed to become their week total. A fault in the scoring meant it never did, so these
+                    finished weeks hold the lower score. Reverse and finalize each one again to rescore it —
+                    that will change the week's ranking and the season standings.
+                </p>
+                <ul>
+                    <?php foreach ( $kf_bpow_weeks as $kf_bwid => $kf_bw ) : ?>
+                        <li>
+                            <a href="<?php echo esc_url( add_query_arg( 'week_id', (int) $kf_bwid, site_url( '/week-summary/' ) ) ); ?>">
+                                <?php echo esc_html( $kf_bw['season'] . ' — Week ' . $kf_bw['week_number'] ); ?>
+                            </a>
+                            — <?php echo esc_html( $kf_bw['player'] ); ?> scored
+                            <?php echo esc_html( $kf_bw['stored'] ); ?>, but their BPOW picks were worth
+                            <?php echo esc_html( $kf_bw['bpow'] ); ?>.
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+                <form method="POST" style="margin:0;">
+                    <?php wp_nonce_field( 'kf_dismiss_bpow_report', 'kf_dismiss_bpow_nonce' ); ?>
+                    <button type="submit" name="kf_dismiss_bpow_report" class="kf-button kf-button-secondary">Done — hide this</button>
                 </form>
             </div>
         <?php endif; ?>

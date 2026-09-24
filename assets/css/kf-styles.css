@@ -568,6 +568,10 @@
 .kf-final-score {
     color: #ffffff; /* White text for final scores */
 }
+.kf-bpow-counted {
+    color: gold;
+    font-style: italic;
+}
 .kf-tie-resolution-form label {
     font-weight: normal;
     cursor: default;
