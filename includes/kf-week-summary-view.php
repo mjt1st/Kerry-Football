@@ -1218,10 +1218,16 @@ function kf_week_summary_view() {
                 var head = cell.querySelector('.kf-header-cell-content');
                 if (head) {
                     var nameEl  = head.querySelector('span');
-                    var smallEl = head.querySelector('small');
                     var main    = (nameEl ? nameEl.textContent : head.textContent).replace(/\s+/g, ' ').trim();
-                    var sub     = smallEl ? smallEl.textContent.replace(/\s+/g, ' ').trim() : '';
-                    return sub ? main + ' (' + sub + ')' : main;
+                    // Every small, not the first: a header carries a second one when the week was
+                    // scored from that player's BPOW picks, and without it the exported sheet shows
+                    // a total that does not match the picks above it, with nothing to explain why.
+                    var subs = [];
+                    Array.prototype.forEach.call(head.querySelectorAll('small'), function(el){
+                        var t = el.textContent.replace(/\s+/g, ' ').trim();
+                        if (t) { subs.push(t); }
+                    });
+                    return subs.length ? main + ' (' + subs.join(', ') + ')' : main;
                 }
                 return cell.textContent.replace(/\s+/g, ' ').trim();
             }
