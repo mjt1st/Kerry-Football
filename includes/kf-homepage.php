@@ -277,6 +277,30 @@ if ( ! function_exists( 'kf_render_season_card' ) ) {
         $picks_link      = $current_week ? site_url( '/my-picks/?week_id=' . $current_week->id ) : '#';
         $is_published    = (bool) $current_week; // by definition, yes if set.
 
+        // Both summaries, for players and commissioners alike. Built here and rendered inside the
+        // player's own section below, because trailing the card they sat under the Admin View
+        // heading on a commissioner's card and read as commissioner tools — a player had no reason
+        // to try them. A commissioner who does not play gets the same set under their own block.
+        //
+        // Week summary: reaching it used to mean typing /week-summary/?week_id=N by hand.
+        // Season summary: the player button only reads "View Summary" before a week is published;
+        // after that it becomes Make Your Picks, and a player had no way from the homepage to one
+        // league's standings. Skipped only while that button IS the season summary link, so the
+        // card never offers it twice.
+        $player_button_is_summary = $is_also_player && ! $is_published;
+        $show_season_link         = ! $player_button_is_summary;
+        $summary_links            = '';
+        if ( $summary_week || $show_season_link ) {
+            $summary_parts = [];
+            if ( $show_season_link ) {
+                $summary_parts[] = '<a href="' . esc_url( kf_league_url( site_url( '/season-summary/' ), $season->id ) ) . '">Season Summary</a>';
+            }
+            if ( $summary_week ) {
+                $summary_parts[] = '<a href="' . esc_url( kf_league_url( site_url( '/week-summary/?week_id=' . (int) $summary_week->id ), $season->id ) ) . '">Week ' . esc_html( $summary_week->week_number ) . ' Summary</a>';
+            }
+            $summary_links = '<div class="kf-card-quick-links">' . implode( ' | ', $summary_parts ) . '</div>';
+        }
+
         ?>
         <div class="kf-season-card">
             <div class="kf-card-header">
@@ -336,6 +360,7 @@ if ( ! function_exists( 'kf_render_season_card' ) ) {
                     <a href="<?php echo esc_url( kf_league_url( $btn_link, $season->id ) ); ?>" class="kf-button kf-button-primary">
                         <?php echo esc_html( $btn_text ); ?>
                     </a>
+                    <?php echo $summary_links; // Built above; every part is escaped there. ?>
                 <?php endif; ?>
 
                 <?php // ----- COMMISSIONER VIEW ----- ?>
@@ -378,27 +403,12 @@ if ( ! function_exists( 'kf_render_season_card' ) ) {
                 <?php endif; ?>
 
                 <?php
-                // Every card gets direct routes to both summaries, for players and commissioners
-                // alike, outside both blocks so a commissioner who also plays gets one set.
-                //
-                // Week summary: reaching it used to mean typing /week-summary/?week_id=N by hand.
-                // Season summary: the player button only reads "View Summary" before a week is
-                // published; after that it becomes Make Your Picks, and a player had no way from
-                // the homepage to one league's standings. Skipped only while that button is
-                // itself the season summary link, so the card never offers it twice.
-                $player_button_is_summary = $is_also_player && ! $is_published;
-                $show_season_link         = ! $player_button_is_summary;
-                if ( $summary_week || $show_season_link ) : ?>
-                    <div class="kf-card-quick-links">
-                        <?php if ( $show_season_link ) : ?>
-                            <a href="<?php echo esc_url( kf_league_url( site_url( '/season-summary/' ), $season->id ) ); ?>">Season Summary</a>
-                        <?php endif; ?>
-                        <?php if ( $show_season_link && $summary_week ) : ?> | <?php endif; ?>
-                        <?php if ( $summary_week ) : ?>
-                            <a href="<?php echo esc_url( kf_league_url( site_url( '/week-summary/?week_id=' . (int) $summary_week->id ), $season->id ) ); ?>">Week <?php echo esc_html( $summary_week->week_number ); ?> Summary</a>
-                        <?php endif; ?>
-                    </div>
-                <?php endif; ?>
+                // A commissioner who does not play this league has no player section, so the
+                // summaries go here instead. One set per card either way.
+                if ( ! $is_also_player ) {
+                    echo $summary_links;
+                }
+                ?>
             </div>
         </div>
         <?php
