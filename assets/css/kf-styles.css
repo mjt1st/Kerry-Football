@@ -565,6 +565,9 @@
 .kf-live-score {
     color: #a7c0e8; /* Lighter blue for better contrast */
 }
+.kf-live-projected {
+    color: #b7e4c7; /* Light green: on course for, not yet banked */
+}
 .kf-final-score {
     color: #ffffff; /* White text for final scores */
 }

@@ -71,7 +71,13 @@ check('results: wp_unslash, not a one-off stripslashes', strpos($er, 'sanitize_t
 check('the live projection normalises too', strpos($er, 'kfTeamKey(pick) === kfTeamKey(result)') !== false && strpos($er, 'function kfTeamKey(') !== false);
 $sum = file_get_contents($ROOT . '/includes/kf-week-summary-view.php');
 check('week summary: no raw pick/result comparisons left', strpos($sum, 'strcasecmp(trim($pick_data->pick)') === false && strpos($sum, 'strcasecmp(trim($bpow_pick_data->pick)') === false);
-check('week summary: compares keys', substr_count($sum, 'kf_team_key($pick_data->pick)') === 3 && substr_count($sum, 'kf_team_key($bpow_pick_data->pick)') === 3,
+// Not a fixed count: comparisons get added (1.8.28 added two for the projected total). What must
+// hold is that every one of them goes through the key, and that no raw form has come back.
+check('week summary: picks are compared as keys, never as raw text',
+    substr_count($sum, 'kf_team_key($pick_data->pick)') >= 3
+    && substr_count($sum, 'kf_team_key($bpow_pick_data->pick)') >= 3
+    && !preg_match('/strcasecmp\(\s*trim\(\$(bpow_)?pick_data->pick/', $sum)
+    && !preg_match('/\$(bpow_)?pick_data->pick\s*===?\s*\$(matchup->result|current_leader|m_leader)/', $sum),
     substr_count($sum, 'kf_team_key($pick_data->pick)') . '/' . substr_count($sum, 'kf_team_key($bpow_pick_data->pick)'));
 
 echo "\nOne-time repair\n";

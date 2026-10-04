@@ -148,8 +148,15 @@ function kf_week_summary_view() {
     foreach ($players_results as $player) { $players[$player->ID] = $player->display_name; }
     // --- END CRITICAL FIX ---
     
-    $live_totals = array_fill_keys(array_keys($players), ['wins' => 0, 'subtotal' => 0]);
-    $bpow_live_totals = ['wins' => 0, 'subtotal' => 0];
+    // Three numbers per player while a week is in play:
+    //   subtotal  — points already banked, from games that have a result
+    //   projected — subtotal plus every in-progress game their pick currently leads
+    //   possible  — subtotal plus every game still without a result, i.e. the most they can
+    //               still finish on (equivalently: the week's points less what they have lost)
+    $live_totals = array_fill_keys(array_keys($players), ['wins' => 0, 'subtotal' => 0, 'projected' => 0, 'possible' => 0]);
+    $bpow_live_totals = ['wins' => 0, 'subtotal' => 0, 'projected' => 0, 'possible' => 0];
+    $week_has_live_game = false;  // at least one game in progress right now
+    $week_has_open_game = false;  // at least one game still without a result
 
     $is_finalized = ($week->status === 'finalized');
     $finalized_scores = [];
@@ -255,6 +262,18 @@ function kf_week_summary_view() {
     foreach ($regular_matchups as $matchup) {
         $is_tie = $matchup->result && in_array(strtolower(trim((string)$matchup->result)), ['tie','t','draw'], true);
 
+        // Who is ahead right now, decided exactly as the pick cells below decide it.
+        $m_live   = (($matchup->game_status ?? null) === 'in_progress');
+        $m_leader = null;
+        if ($m_live && $matchup->home_score !== null && $matchup->away_score !== null) {
+            if ((int)$matchup->home_score > (int)$matchup->away_score)      { $m_leader = $matchup->team_a; }
+            elseif ((int)$matchup->away_score > (int)$matchup->home_score)  { $m_leader = $matchup->team_b; }
+        }
+        if (!$matchup->result) {
+            $week_has_open_game = true;
+            if ($m_live) { $week_has_live_game = true; }
+        }
+
         foreach ($players as $player_id => $player_name) {
             $pick_data = $std_picks_map[$matchup->id][$player_id] ?? null;
             if ($pick_data && $matchup->result) {
@@ -263,6 +282,12 @@ function kf_week_summary_view() {
                 } elseif (kf_team_key($pick_data->pick) === kf_team_key($matchup->result)) {
                     $live_totals[$player_id]['wins']++;
                     $live_totals[$player_id]['subtotal'] += (int)$pick_data->point_value;
+                }
+            } elseif ($pick_data) {
+                // No result yet: still winnable in full, and counted as theirs while they lead it.
+                $live_totals[$player_id]['possible'] += (int)$pick_data->point_value;
+                if ($m_leader !== null && kf_team_key($pick_data->pick) === kf_team_key($m_leader)) {
+                    $live_totals[$player_id]['projected'] += (int)$pick_data->point_value;
                 }
             }
         }
@@ -276,9 +301,22 @@ function kf_week_summary_view() {
                     $bpow_live_totals['wins']++;
                     $bpow_live_totals['subtotal'] += (int)$bpow_pick_data->point_value;
                 }
+            } elseif ($bpow_pick_data) {
+                $bpow_live_totals['possible'] += (int)$bpow_pick_data->point_value;
+                if ($m_leader !== null && kf_team_key($bpow_pick_data->pick) === kf_team_key($m_leader)) {
+                    $bpow_live_totals['projected'] += (int)$bpow_pick_data->point_value;
+                }
             }
         }
     }
+
+    // Both build on what is already banked.
+    foreach ($live_totals as $kf_pid => $kf_t) {
+        $live_totals[$kf_pid]['projected'] += $kf_t['subtotal'];
+        $live_totals[$kf_pid]['possible']  += $kf_t['subtotal'];
+    }
+    $bpow_live_totals['projected'] += $bpow_live_totals['subtotal'];
+    $bpow_live_totals['possible']  += $bpow_live_totals['subtotal'];
 
     if (!$is_finalized) {
         foreach ($players as $player_id => $name) {
@@ -564,7 +602,14 @@ function kf_week_summary_view() {
                                                     <small class="kf-bpow-counted">from BPOW picks</small>
                                                 <?php endif; ?>
                                             <?php elseif (!$is_finalized): ?>
-                                                <small class="kf-live-score">Live Subtotal: <span id="live-subtotal-<?php echo esc_attr($player_id); ?>">0</span></small>
+                                                <small class="kf-live-score">Live Subtotal: <span id="live-subtotal-<?php echo esc_attr($player_id); ?>">0</span><?php
+                                                    if (($live_totals[$player_id]['possible'] ?? 0) > ($live_totals[$player_id]['subtotal'] ?? 0)) {
+                                                        echo ' of ' . esc_html($live_totals[$player_id]['possible']);
+                                                    }
+                                                ?></small>
+                                                <?php if ($week_has_live_game): ?>
+                                                    <small class="kf-live-projected">Projected: <?php echo esc_html($live_totals[$player_id]['projected'] ?? 0); ?></small>
+                                                <?php endif; ?>
                                             <?php endif; ?>
                                         </div>
                                     </th>
@@ -579,7 +624,14 @@ function kf_week_summary_view() {
                                                     <small class="kf-bpow-counted">counted as their week score</small>
                                                 <?php endif; ?>
                                             <?php elseif (!$is_finalized): ?>
-                                                <small class="kf-live-score">Live Subtotal: <span id="live-subtotal-bpow-<?php echo esc_attr($last_week_bpow_winner_id); ?>">0</span></small>
+                                                <small class="kf-live-score">Live Subtotal: <span id="live-subtotal-bpow-<?php echo esc_attr($last_week_bpow_winner_id); ?>">0</span><?php
+                                                    if ($bpow_live_totals['possible'] > $bpow_live_totals['subtotal']) {
+                                                        echo ' of ' . esc_html($bpow_live_totals['possible']);
+                                                    }
+                                                ?></small>
+                                                <?php if ($week_has_live_game): ?>
+                                                    <small class="kf-live-projected">Projected: <?php echo esc_html($bpow_live_totals['projected']); ?></small>
+                                                <?php endif; ?>
                                             <?php endif; ?>
                                         </div>
                                     </th>
@@ -944,6 +996,39 @@ function kf_week_summary_view() {
                                          </td>
                                      <?php endif; ?>
                                  </tr>
+                                 <?php // A row label is its own cell plus an empty Winner cell, never one two-column
+                                       // cell: Hide points rewrites every colspan="2" here, and a pinned two-column
+                                       // label is wider than a phone's table box. ?>
+                                 <?php if ($week_has_live_game): ?>
+                                 <tr>
+                                     <td><strong>Projected</strong></td><td aria-hidden="true"></td>
+                                     <?php foreach ($players as $player_id => $player_name): ?>
+                                         <td colspan="2" class="<?php if ($player_id == $current_user_id) echo 'kf-current-player-col'; ?>" style="text-align: center;">
+                                             <?php echo esc_html($live_totals[$player_id]['projected'] ?? '-'); ?>
+                                         </td>
+                                     <?php endforeach; ?>
+                                     <?php if ($last_week_bpow_winner_id && !$picks_are_hidden): ?>
+                                         <td colspan="2" class="kf-bpow-column <?php if ($last_week_bpow_winner_id == $current_user_id) echo 'kf-current-player-col'; ?>">
+                                             <?php echo esc_html($bpow_live_totals['projected']); ?>
+                                         </td>
+                                     <?php endif; ?>
+                                 </tr>
+                                 <?php endif; ?>
+                                 <?php if ($week_has_open_game): ?>
+                                 <tr>
+                                     <td><strong>Still Possible</strong></td><td aria-hidden="true"></td>
+                                     <?php foreach ($players as $player_id => $player_name): ?>
+                                         <td colspan="2" class="<?php if ($player_id == $current_user_id) echo 'kf-current-player-col'; ?>" style="text-align: center;">
+                                             <?php echo esc_html($live_totals[$player_id]['possible'] ?? '-'); ?>
+                                         </td>
+                                     <?php endforeach; ?>
+                                     <?php if ($last_week_bpow_winner_id && !$picks_are_hidden): ?>
+                                         <td colspan="2" class="kf-bpow-column <?php if ($last_week_bpow_winner_id == $current_user_id) echo 'kf-current-player-col'; ?>">
+                                             <?php echo esc_html($bpow_live_totals['possible']); ?>
+                                         </td>
+                                     <?php endif; ?>
+                                 </tr>
+                                 <?php endif; ?>
                             <?php endif; ?>
                         </tfoot>
                     </table>
@@ -951,6 +1036,10 @@ function kf_week_summary_view() {
             </div>
                     <div class="kf-rank-legend kf-no-print" style="text-align: right; font-size: 0.9em; color: #555; margin-top: 10px;">
                         <span style="color: #8a6d00;">Gold Rank</span>: Indicates player ranking by week/season total score (highest to lowest).
+                        <?php if (!$is_finalized && $week_has_open_game): ?>
+                            <br><strong>Projected</strong>: points banked plus any game in progress that the pick is currently leading — it moves as the games do.
+                            <strong>Live Subtotal "of N"</strong>: the most still reachable, counting every game without a result as a win.
+                        <?php endif; ?>
                         <?php if ($last_week_bpow_winner_id && !$picks_are_hidden): ?>
                             <br><strong>BPOW</strong>: last week's top scorer plays a second set of picks. If that set scores higher than their regular picks it becomes their week total, and the Most Wins bonus does not apply.
                         <?php endif; ?>

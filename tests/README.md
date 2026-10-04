@@ -8,6 +8,7 @@ php tests/smoke-render.php .            # every shortcode renders: no fatals, no
 php tests/test-slashes.php .            # apostrophes in team names (1.8.24) and the one-time repair
 php tests/test-bpow-and-points.php .    # the BPOW score swap and point-value parsing (1.8.25)
 php tests/test-homepage-card.php .      # where the summary links sit on a season card (1.8.26)
+php tests/test-live-totals.php .        # live subtotal, projected and still-possible (1.8.28)
 ```
 
 They all exit non-zero on failure. They live here rather than in a scratch folder because an earlier set
